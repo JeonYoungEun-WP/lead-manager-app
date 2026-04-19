@@ -1,0 +1,39 @@
+package kr.wepick.leadapp.data.db
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface CallRecordDao {
+
+    @Query("SELECT * FROM call_records ORDER BY startedAt DESC")
+    fun observeAll(): Flow<List<CallRecord>>
+
+    @Query("SELECT * FROM call_records WHERE leadId = :leadId ORDER BY startedAt DESC")
+    fun observeByLead(leadId: Long): Flow<List<CallRecord>>
+
+    @Query("SELECT * FROM call_records WHERE id = :id")
+    suspend fun findById(id: Long): CallRecord?
+
+    @Query("SELECT * FROM call_records WHERE fileUri = :fileUri LIMIT 1")
+    suspend fun findByFileUri(fileUri: String): CallRecord?
+
+    @Query("SELECT * FROM call_records WHERE status = 'PENDING' OR status = 'FAILED' ORDER BY startedAt DESC LIMIT :limit")
+    suspend fun pendingForProcessing(limit: Int = 5): List<CallRecord>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(record: CallRecord): Long
+
+    @Update
+    suspend fun update(record: CallRecord)
+
+    @Query("UPDATE call_records SET status = :status, errorMessage = :err WHERE id = :id")
+    suspend fun updateStatus(id: Long, status: String, err: String? = null)
+
+    @Query("UPDATE call_records SET transcript = :transcript, summary = :summary, status = 'DONE' WHERE id = :id")
+    suspend fun setResult(id: Long, transcript: String, summary: String)
+}

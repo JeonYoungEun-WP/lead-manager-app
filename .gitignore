@@ -1,0 +1,41 @@
+# Android / IntelliJ
+*.iml
+.gradle
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+
+# Local env / secrets — 절대 커밋 금지
+local.properties
+/local.properties
+*.keystore
+*.jks
+*.hprof
+.env
+.env.*
+!.env.example
+
+# Claude 설정 — Bash allow 리스트에 평문 토큰 쌓일 수 있음
+.claude/settings.json
+.claude/settings.local.json
+.claude/launch.json
+
+# Build 산출물
+/app/release/
+/app/build/
+/app/schemas/*.json
+
+# Backend (Next.js) 빌드
+/backend/node_modules/
+/backend/.next/
+/backend/.vercel/
+/backend/.env
+/backend/.env.local
+
+# Misc
+*.log
+*.apk
+*.ap_

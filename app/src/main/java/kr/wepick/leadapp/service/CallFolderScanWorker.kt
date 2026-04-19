@@ -1,0 +1,61 @@
+package kr.wepick.leadapp.service
+
+import android.content.Context
+import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
+import androidx.work.CoroutineWorker
+import androidx.work.WorkerParameters
+import androidx.datastore.preferences.core.edit
+import kotlinx.coroutines.flow.first
+import kr.wepick.leadapp.LeadApp
+import kr.wepick.leadapp.data.db.CallRecord
+import kr.wepick.leadapp.ui.screens.KEY_RECORDINGS_URI
+import kr.wepick.leadapp.util.PhoneUtils
+import kr.wepick.leadapp.util.appPreferences
+
+/**
+ * 주기적으로 지정된 녹음 폴더를 스캔하여 새 파일을 DB에 등록.
+ * 리드 DB에 번호가 매칭되는 파일만 CallRecord 로 등록한다.
+ * 매칭 안 되는 파일(가족 통화 등)은 건드리지 않는다.
+ */
+class CallFolderScanWorker(
+    ctx: Context,
+    params: WorkerParameters,
+) : CoroutineWorker(ctx, params) {
+
+    override suspend fun doWork(): Result {
+        val prefs = applicationContext.appPreferences.data.first()
+        val uriStr = prefs[KEY_RECORDINGS_URI] ?: return Result.success()
+        val folder = DocumentFile.fromTreeUri(applicationContext, Uri.parse(uriStr))
+            ?: return Result.success()
+
+        val repo = LeadApp.instance.leadRepo
+        val files = folder.listFiles().filter {
+            it.isFile && (it.name?.endsWith(".m4a", true) == true ||
+                          it.name?.endsWith(".amr", true) == true ||
+                          it.name?.endsWith(".3gp", true) == true)
+        }
+
+        var added = 0
+        for (file in files) {
+            val name = file.name ?: continue
+            val phoneRaw = PhoneUtils.extractFromFilename(name) ?: continue
+
+            // 리드 DB 에 매칭되는 번호 있는지 확인 — 없으면 스킵 (가족 통화 등)
+            val lead = repo.findLeadByPhone(phoneRaw) ?: continue
+
+            val record = CallRecord(
+                leadId = lead.id,
+                phone = phoneRaw,
+                fileUri = file.uri.toString(),
+                startedAt = file.lastModified(),
+                direction = "UNKNOWN",
+                status = "PENDING",
+            )
+            val id = repo.saveCallIfNew(record)
+            if (id != null) added++
+        }
+        // 여기서 바로 STT 처리 워커를 ENQUEUE 하도록 확장 가능
+        return Result.success()
+    }
+}
