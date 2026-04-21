@@ -80,6 +80,92 @@ export default function AdminPage() {
     });
   }, []);
 
+  const streamSummary = useCallback(
+    async (
+      localId: string,
+      transcript: string,
+      leadName: string | undefined,
+      phone: string | undefined,
+    ) => {
+      updateRecord(localId, {
+        status: "summarizing",
+        summary: [],
+        keyPoints: [],
+        error: undefined,
+      });
+      try {
+        const res = await fetch("/api/rtzr/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcript,
+            leadName: leadName ?? "",
+            phone: phone ?? "",
+          }),
+        });
+        if (!res.body) throw new Error(`status ${res.status}`);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let last: {
+          summary?: string[];
+          keyPoints?: { title: string; detail: string }[];
+        } = {};
+
+        const consumeLine = (line: string) => {
+          if (!line.trim()) return;
+          let parsed: {
+            error?: string;
+            summary?: string[];
+            keyPoints?: { title: string; detail: string }[];
+          };
+          try {
+            parsed = JSON.parse(line);
+          } catch {
+            return;
+          }
+          if (parsed.error) throw new Error(parsed.error);
+          last = parsed;
+          updateRecord(localId, {
+            status: "summarizing",
+            summary: parsed.summary ?? [],
+            keyPoints: (parsed.keyPoints ?? []).filter(
+              (k): k is { title: string; detail: string } =>
+                !!k && typeof k.title === "string" && typeof k.detail === "string",
+            ),
+          });
+        };
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) consumeLine(line);
+        }
+        if (buf.trim()) consumeLine(buf);
+
+        updateRecord(localId, {
+          status: "completed",
+          summary: last.summary ?? [],
+          keyPoints: (last.keyPoints ?? []).filter(
+            (k): k is { title: string; detail: string } =>
+              !!k && typeof k.title === "string" && typeof k.detail === "string",
+          ),
+          error: undefined,
+        });
+      } catch (e) {
+        updateRecord(localId, {
+          status: "completed",
+          error: `요약 실패: ${(e as Error).message}`,
+        });
+      }
+    },
+    [updateRecord],
+  );
+
   const startPolling = useCallback(
     (localId: string, rtzrId: string) => {
       if (pollingRef.current.has(localId)) return;
@@ -93,33 +179,10 @@ export default function AdminPage() {
             clearInterval(timer);
             pollingRef.current.delete(localId);
             const transcript: string = json.transcript ?? "";
-            updateRecord(localId, { status: "summarizing", transcript });
-
-            // 요약 요청
+            updateRecord(localId, { transcript });
             const cur = loadRecordings().find((r) => r.id === localId);
-            try {
-              const sumRes = await fetch("/api/rtzr/summarize", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  transcript,
-                  leadName: cur?.leadName ?? "",
-                  phone: cur?.phone ?? "",
-                }),
-              });
-              const sumJson = await sumRes.json();
-              if (!sumRes.ok) throw new Error(sumJson?.error || `status ${sumRes.status}`);
-              updateRecord(localId, {
-                status: "completed",
-                summary: sumJson.summary ?? [],
-                keyPoints: sumJson.keyPoints ?? [],
-              });
-            } catch (e) {
-              updateRecord(localId, {
-                status: "completed",
-                error: `요약 실패: ${(e as Error).message}`,
-              });
-            }
+            // 전문 확보 즉시 요약 스트리밍 시작
+            void streamSummary(localId, transcript, cur?.leadName, cur?.phone);
           } else if (json.status === "failed") {
             clearInterval(timer);
             pollingRef.current.delete(localId);
@@ -140,7 +203,7 @@ export default function AdminPage() {
       }, 5000);
       pollingRef.current.set(localId, timer);
     },
-    [updateRecord],
+    [updateRecord, streamSummary],
   );
 
   useEffect(() => {
@@ -227,29 +290,9 @@ export default function AdminPage() {
     if (selectedId === id) setSelectedId(null);
   };
 
-  const handleRetrySummary = async (rec: Recording) => {
+  const handleRetrySummary = (rec: Recording) => {
     if (!rec.transcript) return;
-    updateRecord(rec.id, { status: "summarizing", error: undefined });
-    try {
-      const res = await fetch("/api/rtzr/summarize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript: rec.transcript,
-          leadName: rec.leadName ?? "",
-          phone: rec.phone ?? "",
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || `status ${res.status}`);
-      updateRecord(rec.id, {
-        status: "completed",
-        summary: json.summary ?? [],
-        keyPoints: json.keyPoints ?? [],
-      });
-    } catch (e) {
-      updateRecord(rec.id, { status: "completed", error: `요약 실패: ${(e as Error).message}` });
-    }
+    void streamSummary(rec.id, rec.transcript, rec.leadName, rec.phone);
   };
 
   const handleDownload = (rec: Recording, kind: "transcript" | "summary") => {

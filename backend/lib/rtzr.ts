@@ -65,6 +65,12 @@ export async function getRtzrToken(): Promise<string> {
   return json.access_token;
 }
 
+export async function getRtzrTokenWithExpiry(): Promise<{ token: string; expireAt: number }> {
+  await getRtzrToken();
+  if (!cachedToken) throw new Error("토큰 캐시 누락");
+  return { token: cachedToken.token, expireAt: cachedToken.expireAt };
+}
+
 export type TranscribeConfig = {
   model_name?: "sommers" | "whisper";
   language?: "ko" | "ja" | "detect" | "multi";

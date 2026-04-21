@@ -14,6 +14,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import kr.wepick.leadapp.service.CallFolderScanWorker
 import kr.wepick.leadapp.util.appPreferences
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -76,6 +79,19 @@ fun SettingsScreen() {
                     }
                     Button(onClick = { folderPicker.launch(null) }) {
                         Text(if (currentUri == null) "녹음 폴더 선택" else "폴더 다시 선택")
+                    }
+                    if (currentUri != null) {
+                        var scanMsg by remember { mutableStateOf<String?>(null) }
+                        OutlinedButton(onClick = {
+                            WorkManager.getInstance(context).enqueue(
+                                OneTimeWorkRequestBuilder<CallFolderScanWorker>().build()
+                            )
+                            scanMsg = "폴더 스캔을 시작했습니다."
+                        }) { Text("지금 스캔") }
+                        scanMsg?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             }

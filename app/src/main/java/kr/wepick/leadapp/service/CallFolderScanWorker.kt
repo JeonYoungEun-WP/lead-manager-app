@@ -3,9 +3,13 @@ package kr.wepick.leadapp.service
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.flow.first
 import kr.wepick.leadapp.LeadApp
 import kr.wepick.leadapp.data.db.CallRecord
@@ -55,7 +59,26 @@ class CallFolderScanWorker(
             val id = repo.saveCallIfNew(record)
             if (id != null) added++
         }
-        // 여기서 바로 STT 처리 워커를 ENQUEUE 하도록 확장 가능
+
+        if (added > 0 || repo.pendingCalls().isNotEmpty()) {
+            val sttWork = OneTimeWorkRequestBuilder<SttWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+            WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+                STT_WORK_NAME,
+                ExistingWorkPolicy.APPEND_OR_REPLACE,
+                sttWork,
+            )
+        }
         return Result.success()
+    }
+
+    companion object {
+        const val SCAN_WORK_NAME = "call-folder-scan"
+        const val STT_WORK_NAME = "stt-process"
     }
 }
