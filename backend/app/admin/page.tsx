@@ -2,6 +2,7 @@
 
 import type { CSSProperties, ChangeEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { upload } from "@vercel/blob/client";
 
 type RecordingStatus =
   | "uploading"
@@ -176,11 +177,25 @@ export default function AdminPage() {
     setLeadName("");
     setPhone("");
 
-    const form = new FormData();
-    form.append("audio", file, file.name);
-
     try {
-      const res = await fetch("/api/rtzr/transcribe", { method: "POST", body: form });
+      // 1) Vercel Blob 에 직접 업로드 (body 제한 없음)
+      const pathname = `uploads/${Date.now()}-${file.name}`;
+      const blob = await upload(pathname, file, {
+        access: "public",
+        handleUploadUrl: "/api/blob/upload",
+        contentType: file.type || "audio/mp4",
+      });
+
+      // 2) Blob URL 을 백엔드에 넘겨 RTZR 제출
+      const res = await fetch("/api/rtzr/transcribe-from-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: blob.url,
+          filename: file.name,
+          deleteAfter: true,
+        }),
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || `status ${res.status}`);
       updateRecord(localId, { rtzrId: json.id, status: "transcribing" });
@@ -304,7 +319,7 @@ export default function AdminPage() {
             style={styles.fileInput}
           />
           <p style={styles.hint}>
-            지원: mp4 / m4a / mp3 / amr / flac / wav · 최대 2GB / 4시간
+            지원: mp4 / m4a / mp3 / amr / flac / wav · 최대 500MB / 4시간 · Vercel Blob 경유 직접 업로드
           </p>
         </div>
       </section>

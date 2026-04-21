@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.63",
+    "@vercel/blob": "^2.3.3",
     "ai": "^6.0.161",
     "next": "16.1.6",
     "react": "19.2.3",

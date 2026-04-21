@@ -7,6 +7,7 @@ export async function GET() {
     ok: true,
     keyPresent: !!process.env.GOOGLE_GENERATIVE_AI_API_KEY,
     rtzrConfigured: !!process.env.RTZR_CLIENT_ID && !!process.env.RTZR_CLIENT_SECRET,
+    blobConfigured: !!process.env.BLOB_READ_WRITE_TOKEN,
     service: "booster-lead-app-backend",
     version: "0.1.0",
   });
