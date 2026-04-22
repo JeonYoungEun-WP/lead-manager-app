@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import kr.wepick.leadapp.LeadApp
 import kr.wepick.leadapp.data.db.Lead
 import kr.wepick.leadapp.util.PhoneUtils
@@ -35,6 +36,7 @@ fun LeadDetailScreen(
 ) {
     val repo = remember { LeadApp.instance.leadRepo }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var lead by remember { mutableStateOf<Lead?>(null) }
     LaunchedEffect(leadId) { lead = repo.getLead(leadId) }
@@ -95,6 +97,7 @@ fun LeadDetailScreen(
                 ) {
                     Button(
                         onClick = {
+                            scope.launch { repo.startOutgoingCall(l.id, l.phone) }
                             val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${l.phone}"))
                             try { context.startActivity(intent) } catch (_: Exception) {
                                 // CALL_PHONE 권한 없을 시 DIAL 인텐트로 폴백

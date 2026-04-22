@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAppToken } from "../../../../lib/auth";
 import { getRtzrTokenWithExpiry, rtzrCredentials } from "../../../../lib/rtzr";
 
 /**
@@ -12,7 +13,9 @@ import { getRtzrTokenWithExpiry, rtzrCredentials } from "../../../../lib/rtzr";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const authErr = requireAppToken(req);
+  if (authErr) return authErr;
   if (!rtzrCredentials()) {
     return NextResponse.json(
       { error: "RTZR_CLIENT_ID / RTZR_CLIENT_SECRET 가 서버에 설정되지 않았습니다." },

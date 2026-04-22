@@ -36,4 +36,14 @@ interface CallRecordDao {
 
     @Query("UPDATE call_records SET transcript = :transcript, summary = :summary, status = 'DONE' WHERE id = :id")
     suspend fun setResult(id: Long, transcript: String, summary: String)
+
+    @Query(
+        "SELECT * FROM call_records WHERE status = 'AWAITING_FILE' " +
+        "AND startedAt BETWEEN :lo AND :hi " +
+        "ORDER BY ABS(startedAt - :ts) ASC LIMIT 1"
+    )
+    suspend fun findAwaitingFileNear(ts: Long, lo: Long, hi: Long): CallRecord?
+
+    @Query("UPDATE call_records SET fileUri = :fileUri, status = 'PENDING' WHERE id = :id")
+    suspend fun attachFile(id: Long, fileUri: String)
 }

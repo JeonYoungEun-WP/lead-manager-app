@@ -41,6 +41,9 @@ class LeadRepository(
         return callRecordDao.insert(record)
     }
 
+    suspend fun hasCallForFileUri(fileUri: String): Boolean =
+        callRecordDao.findByFileUri(fileUri) != null
+
     suspend fun setCallResult(id: Long, transcript: String, summary: String) =
         callRecordDao.setResult(id, transcript, summary)
 
@@ -51,4 +54,30 @@ class LeadRepository(
         callRecordDao.updateStatus(id, "PROCESSING")
 
     suspend fun pendingCalls(): List<CallRecord> = callRecordDao.pendingForProcessing()
+
+    /** 앱에서 리드에게 발신 시 호출. 나중에 녹음 파일이 생기면 이 스텁에 붙는다. */
+    suspend fun startOutgoingCall(leadId: Long, phone: String): Long {
+        val stub = CallRecord(
+            leadId = leadId,
+            phone = PhoneUtils.normalize(phone),
+            fileUri = "intent:${java.util.UUID.randomUUID()}",
+            startedAt = System.currentTimeMillis(),
+            direction = "OUTGOING",
+            status = "AWAITING_FILE",
+        )
+        return callRecordDao.insert(stub)
+    }
+
+    /** 스캐너가 녹음 파일을 스텁에 첨부 (status: AWAITING_FILE → PENDING). */
+    suspend fun attachFileToStub(id: Long, fileUri: String) =
+        callRecordDao.attachFile(id, fileUri)
+
+    /** 파일 타임스탬프 근처의 AWAITING_FILE 스텁 찾기. 기본 창 ±30분. */
+    suspend fun findAwaitingFileNear(
+        fileTs: Long,
+        pastWindowMs: Long = 60 * 60_000L,
+        futureBufferMs: Long = 60_000L,
+    ): CallRecord? = callRecordDao.findAwaitingFileNear(
+        fileTs, fileTs - pastWindowMs, fileTs + futureBufferMs,
+    )
 }

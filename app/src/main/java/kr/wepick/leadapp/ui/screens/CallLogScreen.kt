@@ -80,6 +80,7 @@ private fun StatusBadge(status: String) {
         "DONE" -> Triple("완료", Color(0xFFE6F4EA), Color(0xFF137333))
         "PROCESSING" -> Triple("처리중", Color(0xFFE8F0FE), Color(0xFF1967D2))
         "FAILED" -> Triple("실패", Color(0xFFFCE8E6), Color(0xFFC5221F))
+        "AWAITING_FILE" -> Triple("녹음대기", Color(0xFFF3E8FD), Color(0xFF6B2FD1))
         else -> Triple("대기", Color(0xFFFFF4E5), Color(0xFFB06000))
     }
     Surface(color = bg, shape = MaterialTheme.shapes.small) {

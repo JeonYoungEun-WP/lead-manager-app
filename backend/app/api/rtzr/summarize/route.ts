@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { google } from "@ai-sdk/google";
 import { streamObject } from "ai";
 import { z } from "zod";
+import { requireAppToken } from "../../../../lib/auth";
 
 /**
  * POST /api/rtzr/summarize
@@ -39,6 +40,14 @@ const summarySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const authErr = requireAppToken(req);
+  if (authErr) {
+    const line = JSON.stringify({ error: "인증 실패" }) + "\n";
+    return new Response(line, {
+      status: 401,
+      headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
+    });
+  }
   if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     return ndjsonError("GOOGLE_GENERATIVE_AI_API_KEY 가 서버에 설정되지 않았습니다.", 503);
   }

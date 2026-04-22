@@ -2,6 +2,7 @@ package kr.wepick.leadapp.service
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kr.wepick.leadapp.BuildConfig
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -30,6 +31,7 @@ class RtzrClient(
 
         val req = Request.Builder()
             .url("$backendBaseUrl/api/rtzr/token")
+            .header("X-App-Token", BuildConfig.APP_TOKEN)
             .post(ByteArray(0).toRequestBody(null))
             .build()
         http.newCall(req).execute().use { res ->
