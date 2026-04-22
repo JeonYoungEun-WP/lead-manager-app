@@ -9,10 +9,27 @@ import { requireAppToken } from "../../../lib/auth";
  *   응답: { id, url, uploadedAt }
  *
  * GET /api/transcripts
- *   어드민이 목록 조회. 최신순.
- *   응답: [{ id, url, pathname, agentName?, leadName?, leadPhone?, startedAt?, uploadedAt }]
- *   (메타는 blob path 에서 파싱)
+ *   어드민이 목록 조회. 최신순. 목록 응답에 리드/상담사 메타 포함 (blob path 에 인코딩).
+ *   응답: { items: [{ id, url, pathname, agentName, leadPhone, leadName, startedAt, size, uploadedAt }] }
+ *
+ * blob path 포맷: transcripts/YYYY-MM/{startedAt}_{agentEnc}_{phoneEnc}_{nameEnc}_{uuid}.json
+ *   - 각 메타는 encodeURIComponent + `_` → `%5F` 로 이스케이프 (구분자 충돌 방지).
+ *   - leadName 이 비어있을 경우 "-" 로 채움.
  */
+
+const SEP = "_";
+
+function encodeMeta(s: string): string {
+  return encodeURIComponent(s).replace(/_/g, "%5F");
+}
+
+function decodeMeta(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,7 +76,10 @@ export async function POST(req: NextRequest) {
 
   const date = new Date(body.startedAt);
   const ym = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-  const path = `transcripts/${ym}/${body.startedAt}-${id}.json`;
+  const agentEnc = encodeMeta(body.agentName || "unknown");
+  const phoneEnc = encodeMeta(body.leadPhone);
+  const nameEnc = encodeMeta(body.leadName || "-");
+  const path = `transcripts/${ym}/${body.startedAt}${SEP}${agentEnc}${SEP}${phoneEnc}${SEP}${nameEnc}${SEP}${id}.json`;
 
   try {
     const blob = await put(path, JSON.stringify(record), {
@@ -84,19 +104,43 @@ export async function GET(req: NextRequest) {
     const { blobs } = await list({ prefix: "transcripts/", limit: 500 });
     const items = blobs
       .map((b) => {
-        // path: transcripts/YYYY-MM/{startedAt}-{uuid}.json
-        const m = b.pathname.match(/transcripts\/[^/]+\/(\d+)-([0-9a-f-]+)\.json$/i);
-        const startedAt = m ? Number(m[1]) : 0;
-        const id = m ? m[2] : b.pathname;
-        return {
-          id,
-          url: b.url,
-          pathname: b.pathname,
-          startedAt,
-          size: b.size,
-          uploadedAt: b.uploadedAt,
-        };
+        // 신 포맷: transcripts/YYYY-MM/{startedAt}_{agentEnc}_{phoneEnc}_{nameEnc}_{uuid}.json
+        const mNew = b.pathname.match(
+          /transcripts\/[^/]+\/(\d+)_([^_/]+)_([^_/]+)_([^_/]+)_([0-9a-f-]{36})\.json$/i,
+        );
+        if (mNew) {
+          return {
+            id: mNew[5],
+            url: b.url,
+            pathname: b.pathname,
+            startedAt: Number(mNew[1]),
+            agentName: decodeMeta(mNew[2]),
+            leadPhone: decodeMeta(mNew[3]),
+            leadName: decodeMeta(mNew[4]),
+            size: b.size,
+            uploadedAt: b.uploadedAt,
+          };
+        }
+        // 구 포맷: transcripts/YYYY-MM/{startedAt}-{uuid}.json — 메타 미보유
+        const mOld = b.pathname.match(
+          /transcripts\/[^/]+\/(\d+)-([0-9a-f-]{36})\.json$/i,
+        );
+        if (mOld) {
+          return {
+            id: mOld[2],
+            url: b.url,
+            pathname: b.pathname,
+            startedAt: Number(mOld[1]),
+            agentName: "",
+            leadPhone: "",
+            leadName: "",
+            size: b.size,
+            uploadedAt: b.uploadedAt,
+          };
+        }
+        return null;
       })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
       .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
     return NextResponse.json({ items });
   } catch (e) {

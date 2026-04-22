@@ -8,6 +8,9 @@ type TranscriptItem = {
   url: string;
   pathname: string;
   startedAt: number;
+  agentName: string;
+  leadPhone: string;
+  leadName: string;
   size: number;
   uploadedAt: string;
 };
@@ -168,11 +171,12 @@ export default function AdminPage() {
     );
   }
 
-  const filtered = (items ?? []).filter((it) => {
-    if (!filterAgent) return true;
-    return false; // agentName 은 detail 에만 있음 — 추후 list endpoint 에서 메타 포함시키면 개선
-  });
-  const list = filterAgent ? filtered : items ?? [];
+  const agentOptions = Array.from(
+    new Set((items ?? []).map((it) => it.agentName).filter(Boolean)),
+  ).sort();
+  const list = (items ?? []).filter((it) =>
+    filterAgent ? it.agentName === filterAgent : true,
+  );
 
   return (
     <main style={styles.main}>
@@ -182,6 +186,16 @@ export default function AdminPage() {
           <p style={styles.subtitle}>상담사 폰에서 업로드된 통화 전문/요약</p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <select
+            value={filterAgent}
+            onChange={(e) => setFilterAgent(e.target.value)}
+            style={styles.select}
+          >
+            <option value="">상담사 전체</option>
+            {agentOptions.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
           <button onClick={() => fetchList()} style={styles.btnSecondary} disabled={loading}>
             {loading ? "불러오는 중…" : "새로고침"}
           </button>
@@ -192,7 +206,13 @@ export default function AdminPage() {
       {error && <div style={styles.errorBox}>⚠ {error}</div>}
 
       <section style={styles.listSection}>
-        <h2 style={styles.h2}>통화 기록 ({(items ?? []).length})</h2>
+        <h2 style={styles.h2}>
+          통화 기록 ({list.length}
+          {filterAgent && (items ?? []).length !== list.length
+            ? ` / 전체 ${(items ?? []).length}`
+            : ""}
+          )
+        </h2>
         {items === null ? (
           <p style={styles.empty}>불러오는 중…</p>
         ) : items.length === 0 ? (
@@ -200,21 +220,28 @@ export default function AdminPage() {
         ) : (
           <div style={styles.split}>
             <ul style={styles.list}>
-              {list.map((it) => (
-                <li
-                  key={it.id}
-                  onClick={() => fetchDetail(it.id)}
-                  style={{
-                    ...styles.listItem,
-                    ...(it.id === selectedId ? styles.listItemActive : null),
-                  }}
-                >
-                  <div style={styles.listItemTop}>
-                    <strong>{formatDate(it.startedAt)}</strong>
-                  </div>
-                  <div style={styles.listItemMeta}>{it.pathname.split("/").pop()}</div>
-                </li>
-              ))}
+              {list.map((it) => {
+                const leadName = it.leadName && it.leadName !== "-" ? it.leadName : "";
+                const agent = it.agentName || "-";
+                return (
+                  <li
+                    key={it.id}
+                    onClick={() => fetchDetail(it.id)}
+                    style={{
+                      ...styles.listItem,
+                      ...(it.id === selectedId ? styles.listItemActive : null),
+                    }}
+                  >
+                    <div style={styles.listItemTop}>
+                      <strong>{leadName || "(이름 없음)"}</strong>
+                      <span style={styles.listItemPhone}>{formatPhone(it.leadPhone)}</span>
+                    </div>
+                    <div style={styles.listItemMeta}>
+                      {formatDate(it.startedAt)} · 상담사 {agent}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
 
             <div style={styles.detail}>
@@ -303,8 +330,24 @@ const styles: Record<string, CSSProperties> = {
     background: "white",
   },
   listItemActive: { borderColor: "#2563eb", boxShadow: "0 0 0 1px #2563eb" },
-  listItemTop: { marginBottom: 4 },
-  listItemMeta: { color: "#64748b", fontSize: 11, wordBreak: "break-all" },
+  listItemTop: {
+    marginBottom: 4,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    gap: 8,
+  },
+  listItemPhone: { color: "#475569", fontSize: 12, fontVariantNumeric: "tabular-nums" },
+  listItemMeta: { color: "#64748b", fontSize: 12 },
+  select: {
+    padding: "8px 10px",
+    border: "1px solid #cbd5e1",
+    borderRadius: 6,
+    fontSize: 13,
+    background: "white",
+    color: "#334155",
+    minWidth: 140,
+  },
   detail: {
     border: "1px solid #e2e8f0",
     borderRadius: 8,
