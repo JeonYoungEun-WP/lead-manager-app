@@ -53,6 +53,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filterAgent, setFilterAgent] = useState("");
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState<number | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -80,6 +82,7 @@ export default function AdminPage() {
       if (!res.ok) throw new Error(`status ${res.status}`);
       const json = await res.json();
       setItems(json.items ?? []);
+      setLastRefresh(Date.now());
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -90,6 +93,24 @@ export default function AdminPage() {
   useEffect(() => {
     if (token) void fetchList();
   }, [token, fetchList]);
+
+  useEffect(() => {
+    if (!token || !autoRefresh) return;
+    const INTERVAL_MS = 20_000;
+    const tick = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void fetchList();
+    };
+    const id = window.setInterval(tick, INTERVAL_MS);
+    const onVisible = () => {
+      if (!document.hidden) void fetchList();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [token, autoRefresh, fetchList]);
 
   const fetchDetail = useCallback(
     async (id: string) => {
@@ -183,7 +204,10 @@ export default function AdminPage() {
       <header style={styles.headerRow}>
         <div>
           <h1 style={styles.h1}>녹취관리 어드민</h1>
-          <p style={styles.subtitle}>상담사 폰에서 업로드된 통화 전문/요약</p>
+          <p style={styles.subtitle}>
+            상담사 폰에서 업로드된 통화 전문/요약
+            {lastRefresh && ` · 최근 갱신 ${new Date(lastRefresh).toLocaleTimeString("ko-KR")}`}
+          </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <select
@@ -196,6 +220,14 @@ export default function AdminPage() {
               <option key={a} value={a}>{a}</option>
             ))}
           </select>
+          <label style={styles.autoRefreshLabel} title="20초 간격 자동 갱신">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+            />
+            자동 갱신
+          </label>
           <button onClick={() => fetchList()} style={styles.btnSecondary} disabled={loading}>
             {loading ? "불러오는 중…" : "새로고침"}
           </button>
@@ -347,6 +379,15 @@ const styles: Record<string, CSSProperties> = {
     background: "white",
     color: "#334155",
     minWidth: 140,
+  },
+  autoRefreshLabel: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 13,
+    color: "#475569",
+    cursor: "pointer",
+    userSelect: "none",
   },
   detail: {
     border: "1px solid #e2e8f0",
