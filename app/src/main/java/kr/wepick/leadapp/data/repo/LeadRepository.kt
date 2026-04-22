@@ -53,6 +53,12 @@ class LeadRepository(
     suspend fun markCallProcessing(id: Long) =
         callRecordDao.updateStatus(id, "PROCESSING")
 
+    suspend fun markUploadOk(id: Long) =
+        callRecordDao.updateUploadState(id, "OK", null)
+
+    suspend fun markUploadFailed(id: Long, err: String) =
+        callRecordDao.updateUploadState(id, "FAILED", err)
+
     suspend fun pendingCalls(): List<CallRecord> = callRecordDao.pendingForProcessing()
 
     /** 앱에서 리드에게 발신 시 호출. 나중에 녹음 파일이 생기면 이 스텁에 붙는다. */

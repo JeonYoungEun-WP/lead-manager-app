@@ -51,4 +51,10 @@ data class CallRecord(
 
     /** 마지막 에러 메시지 (상태=FAILED일 때) */
     val errorMessage: String? = null,
+
+    /** 어드민 업로드 상태 - NONE / OK / FAILED */
+    val uploadStatus: String = "NONE",
+
+    /** 업로드 실패 사유 (uploadStatus=FAILED) */
+    val uploadError: String? = null,
 )

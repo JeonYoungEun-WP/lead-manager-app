@@ -69,8 +69,8 @@ class SttWorker(
 
                 repo.setCallResult(call.id, transcript, summary)
 
-                // 어드민 업로드 (실패해도 로컬 저장은 유지)
-                runCatching {
+                // 어드민 업로드 (실패해도 로컬 저장은 유지, 실패 사유는 uploadError 에 기록)
+                val uploadResult = runCatching {
                     withContext(Dispatchers.IO) {
                         val leadName = call.leadId?.let { repo.getLead(it)?.name }.orEmpty()
                         uploadTranscript(
@@ -79,6 +79,12 @@ class SttWorker(
                         )
                     }
                 }
+                uploadResult.fold(
+                    onSuccess = { repo.markUploadOk(call.id) },
+                    onFailure = { e ->
+                        repo.markUploadFailed(call.id, e.message?.take(500) ?: "unknown")
+                    },
+                )
             } catch (e: Exception) {
                 repo.markCallFailed(call.id, e.message ?: "unknown")
             }

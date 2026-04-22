@@ -95,6 +95,30 @@ fun CallDetailScreen(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+
+                UploadStatusCard(c)
+            }
+        }
+    }
+}
+
+@Composable
+private fun UploadStatusCard(c: CallRecord) {
+    val (label, color) = when (c.uploadStatus) {
+        "OK" -> "어드민 업로드 완료" to MaterialTheme.colorScheme.primary
+        "FAILED" -> "어드민 업로드 실패" to MaterialTheme.colorScheme.error
+        else -> "어드민 업로드 대기/미시도" to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Card {
+        Column(Modifier.padding(16.dp)) {
+            Text(label, color = color, style = MaterialTheme.typography.bodyMedium)
+            if (c.uploadStatus == "FAILED" && !c.uploadError.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    c.uploadError,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
     }

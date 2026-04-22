@@ -37,6 +37,9 @@ interface CallRecordDao {
     @Query("UPDATE call_records SET transcript = :transcript, summary = :summary, status = 'DONE' WHERE id = :id")
     suspend fun setResult(id: Long, transcript: String, summary: String)
 
+    @Query("UPDATE call_records SET uploadStatus = :status, uploadError = :err WHERE id = :id")
+    suspend fun updateUploadState(id: Long, status: String, err: String? = null)
+
     @Query(
         "SELECT * FROM call_records WHERE status = 'AWAITING_FILE' " +
         "AND startedAt BETWEEN :lo AND :hi " +
