@@ -1,21 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { list } from "@vercel/blob";
-import { requireAppToken } from "../../../../lib/auth";
 
 /**
  * GET /api/transcripts/[id]
  *   단건 JSON 페이로드 반환.
+ *   어드민 조회는 토큰 없이 접근 가능 (보안 layer 는 Vercel Authentication / IP 제한으로 분리 권장).
  */
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const authErr = requireAppToken(req);
-  if (authErr) return authErr;
   const { id } = await params;
 
   try {

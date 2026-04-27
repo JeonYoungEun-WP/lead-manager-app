@@ -48,7 +48,10 @@ Samsung Galaxy 상담사용 **잠재고객(리드) 관리 앱**.
 **검증 결과 (2026-04-27)**: 5명 리드 / 56개 녹음 파일 → **25건 정상 처리, 0 에러**
 
 ### 2.4 어드민 연동
-- 모든 통화 전사·요약은 `X-App-Token` 헤더와 함께 백엔드 `/api/transcripts` 로 업로드
+- 앱 → 백엔드 **업로드 (POST `/api/transcripts`)** 는 `X-App-Token` 헤더 인증 유지
+- 어드민 웹 (`/admin`) **조회 (GET `/api/transcripts`, `/api/transcripts/[id]`)** 는 토큰 없이 접근 가능
+  - URL 만 알면 누구나 통화 전사 조회 가능 — **URL 은 공유 금지**
+  - 추가 보안 필요시: Vercel Authentication / IP 화이트리스트 / 별도 비밀번호 layer 검토
 - 어드민 웹에서 상담사·리드별 녹취 관리
 
 ## 3. 시스템 구조
@@ -201,3 +204,4 @@ AWAITING_FILE  ── 앱에서 발신만 하고 녹음 파일 미도착
 | 2026-04-22 | v0.5 | 어드민 전문 업로드 + X-App-Token 인증 |
 | 2026-04-27 | **v1.0** | **End-to-end 검증 완료 (25건 정상). 좀비 PROCESSING 자동 복구 추가.** |
 | 2026-04-27 | v1.0 (PRD) | ForegroundService 승격을 [DEFERRED] 로 명시 (트리거 조건 + 구현 체크리스트 정리). |
+| 2026-04-27 | v1.0.1 | 어드민 GET 라우트 토큰 인증 제거 — `/admin` 페이지 토큰 입력 절차 폐지. POST 업로드는 토큰 유지. |

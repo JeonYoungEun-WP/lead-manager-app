@@ -24,8 +24,6 @@ type TranscriptDetail = {
   clientCallId?: number;
 };
 
-const TOKEN_KEY = "booster.admin.token";
-
 function formatDate(ts: number): string {
   if (!ts) return "-";
   const d = new Date(ts);
@@ -42,38 +40,17 @@ function formatPhone(raw: string): string {
 }
 
 export default function AdminPage() {
-  const [token, setToken] = useState<string>("");
-  const [tokenInput, setTokenInput] = useState("");
   const [items, setItems] = useState<TranscriptItem[] | null>(null);
   const [selected, setSelected] = useState<TranscriptDetail | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filterAgent, setFilterAgent] = useState("");
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const t = localStorage.getItem(TOKEN_KEY) ?? "";
-      setToken(t);
-      setTokenInput(t);
-    }
-  }, []);
 
   const fetchList = useCallback(async () => {
-    if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/transcripts", {
-        headers: { "X-App-Token": token },
-        cache: "no-store",
-      });
-      if (res.status === 401) {
-        setError("토큰 인증 실패");
-        localStorage.removeItem(TOKEN_KEY);
-        setToken("");
-        return;
-      }
+      const res = await fetch("/api/transcripts", { cache: "no-store" });
       if (!res.ok) throw new Error(`status ${res.status}`);
       const json = await res.json();
       setItems(json.items ?? []);
@@ -82,44 +59,23 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
-    if (token) void fetchList();
-  }, [token, fetchList]);
+    void fetchList();
+  }, [fetchList]);
 
-  const fetchDetail = useCallback(
-    async (id: string) => {
-      setSelected(null);
-      setSelectedId(id);
-      try {
-        const res = await fetch(`/api/transcripts/${id}`, {
-          headers: { "X-App-Token": token },
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(`status ${res.status}`);
-        setSelected((await res.json()) as TranscriptDetail);
-      } catch (e) {
-        setError((e as Error).message);
-      }
-    },
-    [token],
-  );
-
-  const saveToken = () => {
-    const t = tokenInput.trim();
-    if (!t) return;
-    localStorage.setItem(TOKEN_KEY, t);
-    setToken(t);
-  };
-
-  const logout = () => {
-    localStorage.removeItem(TOKEN_KEY);
-    setToken("");
-    setItems(null);
+  const fetchDetail = useCallback(async (id: string) => {
     setSelected(null);
-    setSelectedId(null);
-  };
+    setSelectedId(id);
+    try {
+      const res = await fetch(`/api/transcripts/${id}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      setSelected((await res.json()) as TranscriptDetail);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
 
   const handleDownload = (d: TranscriptDetail) => {
     const lines: string[] = [];
@@ -144,36 +100,6 @@ export default function AdminPage() {
     URL.revokeObjectURL(url);
   };
 
-  if (!token) {
-    return (
-      <main style={styles.main}>
-        <header style={styles.header}>
-          <h1 style={styles.h1}>녹취관리 어드민</h1>
-          <p style={styles.subtitle}>접근 토큰이 필요합니다.</p>
-        </header>
-        <div style={styles.tokenBox}>
-          <input
-            type="password"
-            value={tokenInput}
-            onChange={(e) => setTokenInput(e.target.value)}
-            placeholder="X-App-Token 값 입력"
-            style={styles.input}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") saveToken();
-            }}
-          />
-          <button onClick={saveToken} style={styles.btn}>로그인</button>
-        </div>
-      </main>
-    );
-  }
-
-  const filtered = (items ?? []).filter((it) => {
-    if (!filterAgent) return true;
-    return false; // agentName 은 detail 에만 있음 — 추후 list endpoint 에서 메타 포함시키면 개선
-  });
-  const list = filterAgent ? filtered : items ?? [];
-
   return (
     <main style={styles.main}>
       <header style={styles.headerRow}>
@@ -185,7 +111,6 @@ export default function AdminPage() {
           <button onClick={() => fetchList()} style={styles.btnSecondary} disabled={loading}>
             {loading ? "불러오는 중…" : "새로고침"}
           </button>
-          <button onClick={logout} style={styles.btnGhost}>로그아웃</button>
         </div>
       </header>
 
@@ -200,7 +125,7 @@ export default function AdminPage() {
         ) : (
           <div style={styles.split}>
             <ul style={styles.list}>
-              {list.map((it) => (
+              {items.map((it) => (
                 <li
                   key={it.id}
                   onClick={() => fetchDetail(it.id)}
@@ -270,7 +195,6 @@ const styles: Record<string, CSSProperties> = {
       '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif',
     color: "#111",
   },
-  header: { marginBottom: 32 },
   headerRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -282,14 +206,6 @@ const styles: Record<string, CSSProperties> = {
   h1: { fontSize: 28, margin: 0 },
   subtitle: { color: "#666", marginTop: 8, fontSize: 14 },
   h2: { fontSize: 18, margin: "0 0 16px" },
-  tokenBox: { display: "flex", gap: 8, maxWidth: 480 },
-  input: {
-    flex: 1,
-    padding: "10px 12px",
-    border: "1px solid #cbd5e1",
-    borderRadius: 6,
-    fontSize: 14,
-  },
   listSection: {},
   empty: { color: "#94a3b8", padding: "20px 0" },
   split: { display: "grid", gridTemplateColumns: "320px 1fr", gap: 20 },
@@ -369,15 +285,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     background: "white",
     color: "#334155",
-    borderRadius: 6,
-    cursor: "pointer",
-    fontSize: 13,
-  },
-  btnGhost: {
-    padding: "8px 14px",
-    border: "none",
-    background: "transparent",
-    color: "#64748b",
     borderRadius: 6,
     cursor: "pointer",
     fontSize: 13,

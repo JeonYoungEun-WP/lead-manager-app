@@ -76,10 +76,9 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(req: NextRequest) {
-  const authErr = requireAppToken(req);
-  if (authErr) return authErr;
-
+export async function GET(_req: NextRequest) {
+  // 어드민 조회는 토큰 없이 접근 가능. (POST 업로드는 X-App-Token 유지)
+  // 보안 layer 가 필요하면 Vercel Authentication / IP 화이트리스트로 분리.
   try {
     const { blobs } = await list({ prefix: "transcripts/", limit: 500 });
     const items = blobs
