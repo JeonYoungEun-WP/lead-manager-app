@@ -81,12 +81,17 @@ export async function GET(_req: NextRequest) {
   // 보안 layer 가 필요하면 Vercel Authentication / IP 화이트리스트로 분리.
   try {
     const { blobs } = await list({ prefix: "transcripts/", limit: 500 });
+    // 두 가지 파일명 포맷을 모두 지원:
+    //   포맷 A (현재): transcripts/YYYY-MM/{startedAt}-{uuid}.json
+    //   포맷 B (구버전): transcripts/YYYY-MM/{startedAt}_{agent}_{phone}_{lead}_{uuid}.json (URL 인코딩 한글 포함 가능)
+    const UUID_RE = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/i;
+    const TS_RE = /\/(\d+)[_-]/;
     const items = blobs
       .map((b) => {
-        // path: transcripts/YYYY-MM/{startedAt}-{uuid}.json
-        const m = b.pathname.match(/transcripts\/[^/]+\/(\d+)-([0-9a-f-]+)\.json$/i);
-        const startedAt = m ? Number(m[1]) : 0;
-        const id = m ? m[2] : b.pathname;
+        const tsM = b.pathname.match(TS_RE);
+        const startedAt = tsM ? Number(tsM[1]) : 0;
+        const idM = b.pathname.match(UUID_RE);
+        const id = idM ? idM[1] : b.pathname;
         return {
           id,
           url: b.url,

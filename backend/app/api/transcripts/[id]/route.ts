@@ -18,7 +18,13 @@ export async function GET(
 
   try {
     const { blobs } = await list({ prefix: "transcripts/", limit: 1000 });
-    const match = blobs.find((b) => b.pathname.endsWith(`-${id}.json`));
+    // 두 가지 파일명 포맷을 모두 지원 (list 엔드포인트와 동일 로직):
+    //   포맷 A: ...-{uuid}.json   포맷 B: ..._{uuid}.json
+    const UUID_RE = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/i;
+    const match = blobs.find((b) => {
+      const m = b.pathname.match(UUID_RE);
+      return m?.[1] === id;
+    });
     if (!match) return NextResponse.json({ error: "없음" }, { status: 404 });
     const res = await fetch(match.url, { cache: "no-store" });
     if (!res.ok) {
