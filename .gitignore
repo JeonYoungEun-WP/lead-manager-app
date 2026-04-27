@@ -18,10 +18,11 @@ local.properties
 .env.*
 !.env.example
 
-# Claude 설정 — Bash allow 리스트에 평문 토큰 쌓일 수 있음
-.claude/settings.json
-.claude/settings.local.json
-.claude/launch.json
+# Claude 설정 — 기본은 무시, agents/ 만 화이트리스트로 추적.
+# (.claude/settings*.json 류는 Bash allow 리스트에 평문 토큰 쌓일 수 있음)
+.claude/*
+!.claude/agents/
+!.claude/agents/**
 
 # Build 산출물
 /app/release/

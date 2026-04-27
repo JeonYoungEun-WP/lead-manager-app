@@ -55,6 +55,9 @@ class LeadRepository(
 
     suspend fun pendingCalls(): List<CallRecord> = callRecordDao.pendingForProcessing()
 
+    /** 죽은 워커가 남긴 PROCESSING 좀비 레코드를 PENDING 으로 복구. */
+    suspend fun resetStaleProcessing(): Int = callRecordDao.resetProcessingToPending()
+
     /** 앱에서 리드에게 발신 시 호출. 나중에 녹음 파일이 생기면 이 스텁에 붙는다. */
     suspend fun startOutgoingCall(leadId: Long, phone: String): Long {
         val stub = CallRecord(

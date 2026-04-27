@@ -1,58 +1,44 @@
 # booster-lead-app — Claude 작업 지침
 
+> 제품 스펙·아키텍처·기능 정의는 [`PRD.md`](./PRD.md) 참고.
+> 이 문서는 Claude 에이전트가 코드 변경 시 반드시 지켜야 할 규칙만 정리한다.
+
 ## ⚠️ 절대 커밋 금지
 
 - **`.env.local`, `.env`, `.env.*`, `local.properties`, `*.keystore`, `*.jks`** — 환경 시크릿·SDK 경로·서명 키.
 - **`.claude/settings.json`, `.claude/settings.local.json`, `.claude/launch.json`** — Bash allow 리스트에 평문 토큰 쌓일 수 있음.
-- 히스토리에 올라간 시크릿은 `force push`로 지워도 GitHub 캐시·fork 에 잔존 → **즉시 rotate**.
+- 히스토리에 올라간 시크릿은 `force push` 로 지워도 GitHub 캐시·fork 에 잔존 → **즉시 rotate**.
 - 커밋 전 `git status` 로 staged 파일 목록 반드시 확인. `git add -A` / `git add .` 지양.
 
-## 프로젝트 개요
+## 코드 컨벤션
 
-Samsung Galaxy 상담사용 잠재고객 관리 앱 (Android Kotlin + Jetpack Compose).
-
-### 주요 기능 (1차)
-- 잠재고객 CRUD (이름·번호·메모·태그·상태)
-- 전화 발신 (CALL_PHONE) / 문자 작성 (기본 SMS 앱 인텐트)
-- Samsung OS 내장 통화 녹음 파일 감지 → 전화번호 매칭 → STT + 5줄 요약
-- 로컬 Room DB 저장
-
-### 구조
-```
-booster-lead-app/
-├── app/               Android Kotlin 메인 모듈
-├── backend/           Next.js — Gemini 2.5 Flash 프록시 (Vercel 배포)
-├── CLAUDE.md, README.md
-└── ...
-```
-
-### 스택
-- Kotlin 2.2 + Jetpack Compose
-- minSdk 33 (Android 13) / targetSdk 36 (Android 16)
-- Room 2.7 / Navigation Compose / WorkManager / DataStore
-- OkHttp (백엔드 호출용)
-- Gemini 2.5 Flash 멀티모달 (오디오 → 전사 + 요약, Vercel 프록시 경유)
-
-## 중요한 기술적 제약
-
-### Samsung 통화 녹음 의존
-- 앱 자체는 통화 녹음하지 않음. **Samsung OS 내장 녹음** 파일만 읽음.
-- 사용자가 Samsung 전화 앱 설정에서 "모든 통화 자동 녹음" 켜야 함.
-- 파일 경로는 SAF(Storage Access Framework) 로 사용자가 `/Recordings/Call/` 지정.
-- 그래서 **Samsung 기기 한정** 서비스. Pixel·iPhone 등 다른 기기는 미지원.
-
-### 녹음 필터링 원칙
-- `CallFolderScanWorker` 는 폴더 전체를 스캔하지만, **리드 DB 에 등록된 번호만** `CallRecord` 로 저장.
-- 매칭 안 되는 파일(가족·지인 등)은 건드리지 않음 — 파일 복사/열기/삭제 어떤 동작도 하지 않음.
-- 사용자에게 이 원칙을 설정 화면에 명시.
-
-### API 키 보안
-- Gemini API 키를 **APK 에 박지 않음** (디컴파일 유출 위험).
-- 앱 → `backend/` Vercel Functions 프록시 → Gemini API 호출 구조.
-- 백엔드 URL 은 앱 설정에서 변경 가능 (DataStore 에 저장).
-
-## 작업 기본 방향
 - 기존 파일 수정 우선. 새 파일·문서 최소화.
-- Kotlin 코드는 `kr.wepick.leadapp` 패키지 아래에 기능별 서브 패키지.
-- Compose 화면은 `ui/screens/`, 내비게이션은 `ui/nav/`, DB 는 `data/db/`, 비즈니스 로직은 `data/repo/`.
-- 긴 작업은 `WorkManager` (`service/`) 로, 필요 시 ForegroundService 승격.
+- Kotlin 코드는 `kr.wepick.leadapp` 패키지 아래에 기능별 서브 패키지로 둔다:
+  - `data/db/` — Room Entity, DAO, AppDatabase
+  - `data/repo/` — 비즈니스 로직 (Repository)
+  - `service/` — WorkManager Worker, 외부 API 클라이언트
+  - `ui/screens/` — Compose 화면
+  - `ui/nav/` — Navigation Compose 그래프
+  - `util/` — 순수 유틸 (PhoneUtils, Preferences 등)
+- 긴 작업은 `WorkManager` 로, 10분 한도를 넘길 가능성이 있으면 `ForegroundService` 승격 검토.
+
+## 워커 수명 주의 (PROCESSING 좀비 방지)
+
+- `SttWorker` 가 RTZR 폴링 중 10분 한도로 죽으면 `CallRecord.status='PROCESSING'` 좀비가 남는다.
+- 신규 워커 추가 시에도 동일 패턴 발생 가능 → **반드시 워커 시작 시점에 `repo.resetStaleProcessing()` 호출**.
+- 현재 `CallFolderScanWorker` / `SttWorker` 양쪽에 안전망 적용. 변경 시 유지 필수.
+
+## 파이프라인 변경 시 검증 절차
+
+기능 수정 후 반드시:
+1. `./gradlew assembleDebug` 빌드 통과
+2. `adb install -r app/build/outputs/apk/debug/app-debug.apk` 후 실기 검증
+3. `adb logcat --pid=$(adb shell pidof kr.wepick.leadapp)` 로 워커 로그 확인
+4. `run-as kr.wepick.leadapp` + `adb exec-out` 로 DB 스냅샷 검증
+   (WAL 같이 받지 않으면 최신 데이터 안 보임)
+
+## 백엔드 (Next.js / Vercel)
+
+- 운영 URL: `https://lead-manager-app-wepick.vercel.app`
+- Vercel Authentication 끄거나 `X-Vercel-Protection-Bypass` 사용 — **앱이 직접 호출하므로 공개 접근 가능해야 함**.
+- Gemini / RTZR / Blob 키는 Vercel 환경 변수에만 두고 APK 에 박지 않는다.

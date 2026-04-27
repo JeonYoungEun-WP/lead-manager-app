@@ -34,6 +34,15 @@ interface CallRecordDao {
     @Query("UPDATE call_records SET status = :status, errorMessage = :err WHERE id = :id")
     suspend fun updateStatus(id: Long, status: String, err: String? = null)
 
+    /**
+     * 이전 워커가 마무리하지 못하고 죽은 PROCESSING 레코드를 PENDING 으로 되돌린다.
+     * SttWorker 가 UNIQUE work (APPEND_OR_REPLACE) 로 등록되므로 동시 실행은 없고,
+     * 새 워커 시작 시점에 PROCESSING 이 남아있다면 이전 워커가 죽은 것이다.
+     * @return 리셋된 행 수
+     */
+    @Query("UPDATE call_records SET status = 'PENDING' WHERE status = 'PROCESSING'")
+    suspend fun resetProcessingToPending(): Int
+
     @Query("UPDATE call_records SET transcript = :transcript, summary = :summary, status = 'DONE' WHERE id = :id")
     suspend fun setResult(id: Long, transcript: String, summary: String)
 

@@ -2,6 +2,7 @@ package kr.wepick.leadapp.service
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +31,21 @@ class SttWorker(
     params: WorkerParameters,
 ) : CoroutineWorker(ctx, params) {
 
+    private companion object {
+        const val TAG = "SttWorker"
+    }
+
     override suspend fun doWork(): Result {
+        val repo = LeadApp.instance.leadRepo
+
+        // 좀비 복구: 이전 워커가 죽으면서 PROCESSING 으로 박힌 레코드를 PENDING 으로 되돌린다.
+        // UNIQUE work (APPEND_OR_REPLACE) 정책상 SttWorker 동시 실행은 없으므로 안전.
+        // backendUrl 미설정 등 어떤 이유로 조기 return 해도 복구는 먼저 보장되어야 한다.
+        val recovered = repo.resetStaleProcessing()
+        if (recovered > 0) {
+            Log.w(TAG, "좀비 PROCESSING 레코드 ${recovered}건을 PENDING 으로 복구했습니다.")
+        }
+
         val prefs = applicationContext.appPreferences.data.first()
         val backendUrl = prefs[KEY_BACKEND_URL]?.trim()?.trimEnd('/').orEmpty()
         if (backendUrl.isBlank()) return Result.success()
@@ -42,7 +57,6 @@ class SttWorker(
             .writeTimeout(10, TimeUnit.MINUTES)
             .build()
         val rtzr = RtzrClient(http, backendUrl)
-        val repo = LeadApp.instance.leadRepo
 
         val pending = repo.pendingCalls()
         for (call in pending) {
