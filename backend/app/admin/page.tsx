@@ -10,6 +10,9 @@ type TranscriptItem = {
   startedAt: number;
   size: number;
   uploadedAt: string;
+  agentName?: string;
+  leadPhone?: string;
+  leadName?: string;
 };
 
 type TranscriptDetail = {
@@ -135,9 +138,15 @@ export default function AdminPage() {
                   }}
                 >
                   <div style={styles.listItemTop}>
-                    <strong>{formatDate(it.startedAt)}</strong>
+                    <strong>
+                      {it.leadName || "(이름 없음)"}
+                      {it.leadPhone ? ` · ${formatPhone(it.leadPhone)}` : ""}
+                    </strong>
                   </div>
-                  <div style={styles.listItemMeta}>{it.pathname.split("/").pop()}</div>
+                  <div style={styles.listItemSub}>
+                    {formatDate(it.startedAt)}
+                    {it.agentName ? ` · 상담사 ${it.agentName}` : ""}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -219,7 +228,8 @@ const styles: Record<string, CSSProperties> = {
     background: "white",
   },
   listItemActive: { borderColor: "#2563eb", boxShadow: "0 0 0 1px #2563eb" },
-  listItemTop: { marginBottom: 4 },
+  listItemTop: { marginBottom: 4, fontSize: 14 },
+  listItemSub: { color: "#64748b", fontSize: 12 },
   listItemMeta: { color: "#64748b", fontSize: 11, wordBreak: "break-all" },
   detail: {
     border: "1px solid #e2e8f0",

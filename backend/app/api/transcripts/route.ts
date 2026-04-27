@@ -82,16 +82,36 @@ export async function GET(_req: NextRequest) {
   try {
     const { blobs } = await list({ prefix: "transcripts/", limit: 500 });
     // 두 가지 파일명 포맷을 모두 지원:
-    //   포맷 A (현재): transcripts/YYYY-MM/{startedAt}-{uuid}.json
-    //   포맷 B (구버전): transcripts/YYYY-MM/{startedAt}_{agent}_{phone}_{lead}_{uuid}.json (URL 인코딩 한글 포함 가능)
+    //   포맷 A (현재 POST 가 생성): transcripts/YYYY-MM/{startedAt}-{uuid}.json
+    //   포맷 B (구버전, 메타 인코딩): transcripts/YYYY-MM/{startedAt}_{agent}_{phone}_{lead}_{uuid}.json
     const UUID_RE = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/i;
-    const TS_RE = /\/(\d+)[_-]/;
     const items = blobs
       .map((b) => {
-        const tsM = b.pathname.match(TS_RE);
+        const filename = b.pathname.split("/").pop() ?? "";
+        // 파일명 첫머리 숫자가 startedAt (epoch ms). YYYY-MM 디렉토리 부분에 매칭되면 안 되므로 basename 기준.
+        const tsM = filename.match(/^(\d+)/);
         const startedAt = tsM ? Number(tsM[1]) : 0;
-        const idM = b.pathname.match(UUID_RE);
+        const idM = filename.match(UUID_RE);
         const id = idM ? idM[1] : b.pathname;
+
+        // 포맷 B 의 경우 파일명 중간에 상담사/번호/리드가 URL 인코딩되어 들어있음 → 디코드해서 미리보기 제공.
+        // 포맷 A 는 ts-uuid 만 있으므로 메타 없음.
+        let agentName: string | undefined;
+        let leadPhone: string | undefined;
+        let leadName: string | undefined;
+        const stripped = filename.replace(/^\d+_/, "").replace(UUID_RE, "");
+        const parts = stripped.split("_").filter(Boolean);
+        // 기대: [agent, phone, lead] (단, 끝 _ 제거 후 trailing 빈 문자열 가능)
+        if (parts.length >= 3) {
+          try {
+            agentName = decodeURIComponent(parts[0]);
+            leadPhone = decodeURIComponent(parts[1]);
+            leadName = decodeURIComponent(parts.slice(2).join("_"));
+          } catch {
+            // 디코딩 실패는 무시 — detail 클릭 시 JSON 에서 정확한 값 가져옴.
+          }
+        }
+
         return {
           id,
           url: b.url,
@@ -99,6 +119,9 @@ export async function GET(_req: NextRequest) {
           startedAt,
           size: b.size,
           uploadedAt: b.uploadedAt,
+          agentName,
+          leadPhone,
+          leadName,
         };
       })
       .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
