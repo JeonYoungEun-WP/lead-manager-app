@@ -14,6 +14,8 @@ type TranscriptItem = {
   leadPhone: string;
   leadName: string;
   callType?: CallType;
+  /** 통화 길이 (초). v4 path 부터 list 응답에 포함. v3 이하는 null. */
+  durationSec?: number | null;
   size: number;
   uploadedAt: string;
 };
@@ -341,6 +343,9 @@ export default function AdminPage() {
                       </div>
                       <div style={styles.listItemMeta}>
                         {formatDate(it.startedAt)} · 상담사 {agent}
+                        {it.durationSec != null && it.durationSec > 0 && (
+                          <> · {formatDuration(it.durationSec)}</>
+                        )}
                       </div>
                     </li>
                   );

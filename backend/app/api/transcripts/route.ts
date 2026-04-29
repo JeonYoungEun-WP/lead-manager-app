@@ -156,10 +156,12 @@ export async function POST(req: NextRequest) {
   const agentEnc = encodeMeta(agentName);
   const phoneEnc = encodeMeta(body.leadPhone);
   const nameEnc = encodeMeta(body.leadName || "-");
-  // 신 포맷 (v3): {startedAt}_{agent}_{phone}_{name}_{callType}_{uuid}.json
+  // 통화 길이 — 어드민 목록에 N+1 fetch 없이 표시하려고 path 에 박는다. 미보유시 0.
+  const dur = (body.durationSec != null && body.durationSec > 0) ? body.durationSec : 0;
+  // v4 포맷: {startedAt}_{agent}_{phone}_{name}_{callType}_{durationSec}_{uuid}.json
   // callType 토큰들 (RECORDED|NO_ANSWER|MISSED|REJECTED) 은 [A-Z_]+ 패턴이라
   // 인접한 [^_/]+ greedy 매칭과 충돌하지 않음 (정규식 alternation 으로 정확 매칭).
-  const path = `transcripts/${ym}/${body.startedAt}${SEP}${agentEnc}${SEP}${phoneEnc}${SEP}${nameEnc}${SEP}${callType}${SEP}${id}.json`;
+  const path = `transcripts/${ym}/${body.startedAt}${SEP}${agentEnc}${SEP}${phoneEnc}${SEP}${nameEnc}${SEP}${callType}${SEP}${dur}${SEP}${id}.json`;
 
   try {
     const blob = await put(path, JSON.stringify(record), {
@@ -183,7 +185,27 @@ export async function GET(_req: NextRequest) {
     const { blobs } = await list({ prefix: "transcripts/", limit: 500 });
     const items = blobs
       .map((b) => {
-        // v3 (현행): {startedAt}_{agent}_{phone}_{name}_{callType}_{uuid}.json
+        // v4 (현행): {startedAt}_{agent}_{phone}_{name}_{callType}_{durationSec}_{uuid}.json
+        const mV4 = b.pathname.match(
+          /transcripts\/[^/]+\/(\d+)_([^_/]+)_([^_/]+)_([^_/]+)_(RECORDED|NO_ANSWER|MISSED|REJECTED)_(\d+)_([0-9a-f-]{36})\.json$/i,
+        );
+        if (mV4) {
+          const d = Number(mV4[6]);
+          return {
+            id: mV4[7],
+            url: b.url,
+            pathname: b.pathname,
+            startedAt: Number(mV4[1]),
+            agentName: decodeMeta(mV4[2]),
+            leadPhone: decodeMeta(mV4[3]),
+            leadName: decodeMeta(mV4[4]),
+            callType: mV4[5].toUpperCase() as CallType,
+            durationSec: d > 0 ? d : null,
+            size: b.size,
+            uploadedAt: b.uploadedAt,
+          };
+        }
+        // v3: {startedAt}_{agent}_{phone}_{name}_{callType}_{uuid}.json — durationSec 정보 없음
         const mV3 = b.pathname.match(
           /transcripts\/[^/]+\/(\d+)_([^_/]+)_([^_/]+)_([^_/]+)_(RECORDED|NO_ANSWER|MISSED|REJECTED)_([0-9a-f-]{36})\.json$/i,
         );
@@ -197,6 +219,7 @@ export async function GET(_req: NextRequest) {
             leadPhone: decodeMeta(mV3[3]),
             leadName: decodeMeta(mV3[4]),
             callType: mV3[5].toUpperCase() as CallType,
+            durationSec: null,
             size: b.size,
             uploadedAt: b.uploadedAt,
           };
@@ -215,6 +238,7 @@ export async function GET(_req: NextRequest) {
             leadPhone: decodeMeta(mV2[3]),
             leadName: decodeMeta(mV2[4]),
             callType: "RECORDED" as CallType,
+            durationSec: null,
             size: b.size,
             uploadedAt: b.uploadedAt,
           };
@@ -233,6 +257,7 @@ export async function GET(_req: NextRequest) {
             leadPhone: "",
             leadName: "",
             callType: "RECORDED" as CallType,
+            durationSec: null,
             size: b.size,
             uploadedAt: b.uploadedAt,
           };
