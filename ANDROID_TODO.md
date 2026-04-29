@@ -65,7 +65,47 @@
 
 ---
 
-## 🔵 4. PRD §9.2 — RTZR 삭제 연동 (정책 확인 선행)
+## 🟣 4. 미응답·부재중·거절 통화도 리스트에 표시
+
+녹음 파일이 생기지 않는 통화(미응답·부재중·거절)도 어드민에서 보이도록 하는 작업.
+삼성 OS 는 통화가 연결되지 않으면 녹음 파일을 만들지 않으므로, 폴더 스캔만으로는 잡히지 않음.
+
+### 4.1 앱 — `CallLog` provider 기반 감지
+- [ ] `READ_CALL_LOG` 권한 활용 (이미 사용 중)
+- [ ] 통화 종료 시점 감지:
+  - 옵션 A: `TelephonyManager.PhoneStateListener` 또는 `TelephonyCallback` (Android 12+)
+  - 옵션 B: 앱에서 발신 직후 30초~수 분 뒤 CallLog 재조회 (간단)
+- [ ] 통화 직후 CallLog 최근 항목 조회 → 리드 DB 와 매칭되면 `CallRecord` 등록
+  - `type=OUTGOING` + `duration=0` → `status="NO_ANSWER"` (미응답 발신)
+  - `type=MISSED` → `status="MISSED"` (수신 부재중)
+  - `type=REJECTED` → `status="REJECTED"` (수신 거절)
+- [ ] STT/요약 단계 스킵 — `transcript=null`, `summary=null` 로 즉시 업로드 큐잉
+
+### 4.2 백엔드 — 비전사 업로드 허용
+- [ ] `POST /api/transcripts` 의 `TranscriptPayload`:
+  - `transcript` 필드를 **선택**으로 변경
+  - `callType: "RECORDED" | "NO_ANSWER" | "MISSED" | "REJECTED"` 필드 추가
+  - `summary` 도 선택 (NO_ANSWER 등은 비어있음)
+- [ ] blob 경로 또는 record JSON 에 `callType` 보존
+- [ ] GET 응답에 `callType` 포함
+
+### 4.3 어드민 — 통화 유형 구분 표시
+- [ ] 리스트 항목에 통화 유형 배지 표시
+  - `RECORDED` (기본, 배지 없음 또는 "녹음")
+  - `NO_ANSWER` — 회색 배지 "미응답"
+  - `MISSED` — 주황 배지 "부재중"
+  - `REJECTED` — 빨강 배지 "거절"
+- [ ] 상세 화면: 비전사 통화는 transcript/요약 영역 대신 통화 시도 사실만 표시
+- [ ] 상담사 필터에 추가로 "통화 유형 필터" 셀렉트 추가 검토
+
+### 4.4 확장 (선택)
+- [ ] 같은 리드에 대한 통화 시도 횟수 집계 (예: "오늘 3회 시도, 1회 통화")
+- [ ] 부재중 알림 — 미응답이 N회 이상 누적된 리드를 어드민 상단에 강조
+- [ ] 통화 유형별 카운트 헤더 ("녹음 12 / 미응답 3 / 부재중 1")
+
+---
+
+## 🔵 5. PRD §9.2 — RTZR 삭제 연동 (정책 확인 선행)
 
 - [ ] RTZR 개발자 문서에서 삭제 API 존재 여부 확인 ([developers.rtzr.ai](https://developers.rtzr.ai/))
 - [ ] 있으면 `RtzrClient.delete(id)` 메서드 추가
