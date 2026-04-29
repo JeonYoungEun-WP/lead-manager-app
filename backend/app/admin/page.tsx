@@ -27,6 +27,24 @@ type TranscriptDetail = {
   clientCallId?: number;
 };
 
+type AlertState = "past" | "imminent" | "future" | "undated";
+
+type AlertItem = {
+  type: "callback";
+  id: string;
+  pathname: string;
+  startedAt: number;
+  agentName: string;
+  leadName: string;
+  leadPhone: string;
+  callbackAtIso: string | null;
+  callbackAtMs: number | null;
+  note: string;
+  state: AlertState;
+};
+
+type Tab = "list" | "alerts";
+
 const TOKEN_KEY = "booster.admin.token";
 
 function formatDate(ts: number): string {
@@ -55,6 +73,9 @@ export default function AdminPage() {
   const [filterAgent, setFilterAgent] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<number | null>(null);
+  const [tab, setTab] = useState<Tab>("list");
+  const [alerts, setAlerts] = useState<AlertItem[] | null>(null);
+  const [alertsLoading, setAlertsLoading] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -90,9 +111,30 @@ export default function AdminPage() {
     }
   }, [token]);
 
+  const fetchAlerts = useCallback(async () => {
+    if (!token) return;
+    setAlertsLoading(true);
+    try {
+      const res = await fetch("/api/alerts", {
+        headers: { "X-App-Token": token },
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const json = await res.json();
+      setAlerts(json.items ?? []);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setAlertsLoading(false);
+    }
+  }, [token]);
+
   useEffect(() => {
-    if (token) void fetchList();
-  }, [token, fetchList]);
+    if (token) {
+      void fetchList();
+      void fetchAlerts();
+    }
+  }, [token, fetchList, fetchAlerts]);
 
   useEffect(() => {
     if (!token || !autoRefresh) return;
@@ -100,17 +142,21 @@ export default function AdminPage() {
     const tick = () => {
       if (typeof document !== "undefined" && document.hidden) return;
       void fetchList();
+      void fetchAlerts();
     };
     const id = window.setInterval(tick, INTERVAL_MS);
     const onVisible = () => {
-      if (!document.hidden) void fetchList();
+      if (!document.hidden) {
+        void fetchList();
+        void fetchAlerts();
+      }
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [token, autoRefresh, fetchList]);
+  }, [token, autoRefresh, fetchList, fetchAlerts]);
 
   const fetchDetail = useCallback(
     async (id: string) => {
@@ -198,6 +244,9 @@ export default function AdminPage() {
   const list = (items ?? []).filter((it) =>
     filterAgent ? it.agentName === filterAgent : true,
   );
+  const dueAlertCount = (alerts ?? []).filter(
+    (a) => a.state === "past" || a.state === "imminent",
+  ).length;
 
   return (
     <main style={styles.main}>
@@ -237,56 +286,185 @@ export default function AdminPage() {
 
       {error && <div style={styles.errorBox}>⚠ {error}</div>}
 
-      <section style={styles.listSection}>
-        <h2 style={styles.h2}>
-          통화 기록 ({list.length}
-          {filterAgent && (items ?? []).length !== list.length
-            ? ` / 전체 ${(items ?? []).length}`
-            : ""}
-          )
-        </h2>
-        {items === null ? (
-          <p style={styles.empty}>불러오는 중…</p>
-        ) : items.length === 0 ? (
-          <p style={styles.empty}>아직 업로드된 통화가 없습니다.</p>
-        ) : (
-          <div style={styles.split}>
-            <ul style={styles.list}>
-              {list.map((it) => {
-                const leadName = it.leadName && it.leadName !== "-" ? it.leadName : "";
-                const agent = it.agentName || "-";
-                return (
-                  <li
-                    key={it.id}
-                    onClick={() => fetchDetail(it.id)}
-                    style={{
-                      ...styles.listItem,
-                      ...(it.id === selectedId ? styles.listItemActive : null),
-                    }}
-                  >
-                    <div style={styles.listItemTop}>
-                      <strong>{leadName || "(이름 없음)"}</strong>
-                      <span style={styles.listItemPhone}>{formatPhone(it.leadPhone)}</span>
-                    </div>
-                    <div style={styles.listItemMeta}>
-                      {formatDate(it.startedAt)} · 상담사 {agent}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+      {dueAlertCount > 0 && (
+        <div style={styles.alertBanner} onClick={() => setTab("alerts")}>
+          🔔 재연락 시각이 도래한 통화가 <strong>{dueAlertCount}건</strong> 있습니다 — 클릭해서 알림 탭으로 이동
+        </div>
+      )}
 
-            <div style={styles.detail}>
-              {selected ? (
-                <Detail d={selected} onDownload={() => handleDownload(selected)} />
-              ) : (
-                <p style={styles.empty}>좌측에서 통화를 선택하세요.</p>
+      <nav style={styles.tabs}>
+        <button
+          onClick={() => setTab("list")}
+          style={{ ...styles.tabBtn, ...(tab === "list" ? styles.tabBtnActive : null) }}
+        >
+          통화 기록
+          <span style={styles.tabBadge}>{(items ?? []).length}</span>
+        </button>
+        <button
+          onClick={() => setTab("alerts")}
+          style={{ ...styles.tabBtn, ...(tab === "alerts" ? styles.tabBtnActive : null) }}
+        >
+          알림
+          <span
+            style={{
+              ...styles.tabBadge,
+              ...(dueAlertCount > 0 ? styles.tabBadgeAlert : null),
+            }}
+          >
+            {(alerts ?? []).length}
+          </span>
+        </button>
+      </nav>
+
+      {tab === "list" ? (
+        <section style={styles.listSection}>
+          <h2 style={styles.h2}>
+            통화 기록 ({list.length}
+            {filterAgent && (items ?? []).length !== list.length
+              ? ` / 전체 ${(items ?? []).length}`
+              : ""}
+            )
+          </h2>
+          {items === null ? (
+            <p style={styles.empty}>불러오는 중…</p>
+          ) : items.length === 0 ? (
+            <p style={styles.empty}>아직 업로드된 통화가 없습니다.</p>
+          ) : (
+            <div style={styles.split}>
+              <ul style={styles.list}>
+                {list.map((it) => {
+                  const leadName = it.leadName && it.leadName !== "-" ? it.leadName : "";
+                  const agent = it.agentName || "-";
+                  return (
+                    <li
+                      key={it.id}
+                      onClick={() => fetchDetail(it.id)}
+                      style={{
+                        ...styles.listItem,
+                        ...(it.id === selectedId ? styles.listItemActive : null),
+                      }}
+                    >
+                      <div style={styles.listItemTop}>
+                        <strong>{leadName || "(이름 없음)"}</strong>
+                        <span style={styles.listItemPhone}>{formatPhone(it.leadPhone)}</span>
+                      </div>
+                      <div style={styles.listItemMeta}>
+                        {formatDate(it.startedAt)} · 상담사 {agent}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <div style={styles.detail}>
+                {selected ? (
+                  <Detail d={selected} onDownload={() => handleDownload(selected)} />
+                ) : (
+                  <p style={styles.empty}>좌측에서 통화를 선택하세요.</p>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      ) : (
+        <AlertsTab
+          alerts={alerts}
+          loading={alertsLoading}
+          onSelect={(id) => {
+            setTab("list");
+            fetchDetail(id);
+          }}
+        />
+      )}
+    </main>
+  );
+}
+
+function AlertsTab({
+  alerts,
+  loading,
+  onSelect,
+}: {
+  alerts: AlertItem[] | null;
+  loading: boolean;
+  onSelect: (id: string) => void;
+}) {
+  if (alerts === null) {
+    return (
+      <section style={styles.listSection}>
+        <p style={styles.empty}>{loading ? "불러오는 중…" : "데이터 없음"}</p>
+      </section>
+    );
+  }
+  if (alerts.length === 0) {
+    return (
+      <section style={styles.listSection}>
+        <h2 style={styles.h2}>알림 (0)</h2>
+        <p style={styles.empty}>활성 알림이 없습니다. 재연락 요청 통화가 업로드되면 여기에 표시됩니다.</p>
+      </section>
+    );
+  }
+  return (
+    <section style={styles.listSection}>
+      <h2 style={styles.h2}>알림 ({alerts.length})</h2>
+      <ul style={styles.alertList}>
+        {alerts.map((a) => (
+          <li key={a.id} style={styles.alertCard} onClick={() => onSelect(a.id)}>
+            <div style={styles.alertCardTop}>
+              <StateBadge state={a.state} />
+              <strong style={styles.alertLead}>
+                {a.leadName && a.leadName !== "-" ? a.leadName : "(이름 없음)"}
+              </strong>
+              <span style={styles.alertPhone}>{formatPhone(a.leadPhone)}</span>
+              <span style={styles.alertAgent}>· 상담사 {a.agentName || "-"}</span>
+            </div>
+            <div style={styles.alertCardBody}>
+              <div>
+                <span style={styles.alertLabel}>재연락 시각</span>
+                <span style={styles.alertValue}>
+                  {a.callbackAtIso
+                    ? `${a.callbackAtIso.replace("T", " ")} (KST)`
+                    : "시각 미정"}
+                </span>
+              </div>
+              <div>
+                <span style={styles.alertLabel}>통화 시각</span>
+                <span style={styles.alertValue}>{formatDate(a.startedAt)}</span>
+              </div>
+              {a.note && (
+                <div>
+                  <span style={styles.alertLabel}>메모</span>
+                  <span style={styles.alertValue}>{a.note}</span>
+                </div>
               )}
             </div>
-          </div>
-        )}
-      </section>
-    </main>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function StateBadge({ state }: { state: AlertState }) {
+  const conf = {
+    past: { label: "지남", bg: "#fee2e2", color: "#991b1b" },
+    imminent: { label: "임박", bg: "#fef3c7", color: "#92400e" },
+    future: { label: "예정", bg: "#dbeafe", color: "#1e40af" },
+    undated: { label: "시각 미정", bg: "#e2e8f0", color: "#334155" },
+  }[state];
+  return (
+    <span
+      style={{
+        background: conf.bg,
+        color: conf.color,
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 600,
+      }}
+    >
+      {conf.label}
+    </span>
   );
 }
 
@@ -389,6 +567,84 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     userSelect: "none",
   },
+  alertBanner: {
+    padding: "12px 16px",
+    background: "#fef3c7",
+    border: "1px solid #fcd34d",
+    color: "#92400e",
+    borderRadius: 8,
+    fontSize: 14,
+    marginBottom: 16,
+    cursor: "pointer",
+  },
+  tabs: {
+    display: "flex",
+    gap: 4,
+    borderBottom: "1px solid #e2e8f0",
+    marginBottom: 16,
+  },
+  tabBtn: {
+    background: "none",
+    border: "none",
+    padding: "10px 16px",
+    fontSize: 14,
+    color: "#64748b",
+    cursor: "pointer",
+    borderBottom: "2px solid transparent",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  tabBtnActive: {
+    color: "#2563eb",
+    borderBottomColor: "#2563eb",
+    fontWeight: 600,
+  },
+  tabBadge: {
+    fontSize: 11,
+    padding: "1px 8px",
+    borderRadius: 999,
+    background: "#e2e8f0",
+    color: "#475569",
+    fontWeight: 600,
+  },
+  tabBadgeAlert: {
+    background: "#fee2e2",
+    color: "#991b1b",
+  },
+  alertList: {
+    listStyle: "none",
+    padding: 0,
+    margin: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  alertCard: {
+    padding: 14,
+    border: "1px solid #e2e8f0",
+    borderRadius: 8,
+    background: "white",
+    cursor: "pointer",
+  },
+  alertCardTop: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+    flexWrap: "wrap",
+  },
+  alertLead: { fontSize: 15 },
+  alertPhone: { color: "#475569", fontSize: 13, fontVariantNumeric: "tabular-nums" },
+  alertAgent: { color: "#94a3b8", fontSize: 12 },
+  alertCardBody: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "6px 16px",
+    fontSize: 13,
+  },
+  alertLabel: { color: "#94a3b8", marginRight: 8 },
+  alertValue: { color: "#334155" },
   detail: {
     border: "1px solid #e2e8f0",
     borderRadius: 8,

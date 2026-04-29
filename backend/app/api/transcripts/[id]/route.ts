@@ -20,7 +20,10 @@ export async function GET(
 
   try {
     const { blobs } = await list({ prefix: "transcripts/", limit: 1000 });
-    const match = blobs.find((b) => b.pathname.endsWith(`-${id}.json`));
+    // 구 포맷 path: ...-{uuid}.json, 신 포맷 path: ..._{uuid}.json — 둘 다 매치
+    const match = blobs.find(
+      (b) => b.pathname.endsWith(`-${id}.json`) || b.pathname.endsWith(`_${id}.json`),
+    );
     if (!match) return NextResponse.json({ error: "없음" }, { status: 404 });
     const res = await fetch(match.url, { cache: "no-store" });
     if (!res.ok) {

@@ -105,7 +105,44 @@
 
 ---
 
-## 🔵 5. PRD §9.2 — RTZR 삭제 연동 (정책 확인 선행)
+## 🟠 5. 재연락 감지 — Phase 1 / Phase 2
+
+Phase 0(백엔드 Gemini 프롬프트로 요약 첫 줄에 `[#재연락 ...]` 마커 삽입 + 어드민 알림 탭) 은 이미 배포됨.
+이 섹션은 텍스트 마커 파싱 방식을 정식 구조화 데이터로 격상하고, 폰 로컬 알림을 추가하는 작업.
+
+### 5.1 Phase 1 — 정식 구조화 필드 (Android 빌드 필요)
+- [ ] `CallRecord` 에 컬럼 추가:
+  - `callbackAt: Long?` — 재연락 절대 시각 (ms, KST 가정)
+  - `tags: String?` — 콤마 구분 또는 별도 테이블 (예: "재연락,긴급")
+- [ ] Room 마이그레이션 (v2→v3, `fallbackToDestructiveMigration` 유지 시 자동 처리)
+- [ ] `SttWorker.fetchSummary` 에서 Gemini 응답의 `callback` 필드를 별도 파싱해서 DB 저장
+  - 백엔드 `summarize` 응답 schema 가 이미 callback 정보를 담고 있다고 가정 — 필요 시 백엔드 응답에 명시적 `callback` 필드 추가 검토 (현재는 summary 첫 줄 마커로만 표현)
+- [ ] 업로드 페이로드(`POST /api/transcripts`) 에 `callbackAt`, `tags` 포함
+- [ ] 백엔드 record JSON 에 보존 → 어드민이 텍스트 파싱 대신 구조화 데이터 사용 (현재 `extractCallback` 헬퍼는 fallback 으로 유지)
+- [ ] 어드민 `/api/alerts` 가 record JSON 의 `callbackAt` 필드를 우선 사용하고 없을 때만 텍스트 파싱
+
+### 5.2 Phase 1.5 — 앱 내 "재연락 대기" 화면 (선택)
+- [ ] 메인 화면에 "재연락 N건" 카드
+- [ ] 클릭 시 `callbackAt ASC` 정렬 리스트 (지난 건은 빨강, 임박 건은 노랑)
+- [ ] 항목 클릭 → 발신 인텐트 즉시 실행
+
+### 5.3 Phase 2 — 폰 로컬 알림 (Android 빌드 필요)
+- [ ] `WorkManager` 또는 `AlarmManager.setExactAndAllowWhileIdle` 로 `callbackAt` 시각에 알림 예약
+  - Doze 모드 회피 위해 `setExactAndAllowWhileIdle` 권장 (POST_NOTIFICATIONS 권한 필요)
+- [ ] 알림 본문 예시: "오후 3시 재연락 약속 — 김철수 010-XXXX-XXXX"
+- [ ] 알림 클릭 → 해당 통화 상세 화면으로 딥링크
+- [ ] 설정 화면에서 알림 ON/OFF 토글 (DataStore 저장)
+- [ ] 통화 발신 또는 일정 시간 경과 후 알림 자동 dismiss
+
+### 5.4 어드민 측 보강 (Android 와 무관, 필요 시 별도 작업)
+- [ ] 알림 탭에서 "처리 완료" 마킹 기능 — 현재는 시간만 지나면 사라지지 않고 계속 표시됨
+- [ ] 알림 sound (브라우저 Notification API + `Audio.play()`)
+- [ ] 새 알림 도착 시 토스트
+- [ ] 알림 탭 active 시 favicon 빨간 점 표시
+
+---
+
+## 🔵 6. PRD §9.2 — RTZR 삭제 연동 (정책 확인 선행)
 
 - [ ] RTZR 개발자 문서에서 삭제 API 존재 여부 확인 ([developers.rtzr.ai](https://developers.rtzr.ai/))
 - [ ] 있으면 `RtzrClient.delete(id)` 메서드 추가
