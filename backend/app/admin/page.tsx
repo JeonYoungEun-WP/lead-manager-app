@@ -3,6 +3,8 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useState } from "react";
 
+type CallType = "RECORDED" | "NO_ANSWER" | "MISSED" | "REJECTED";
+
 type TranscriptItem = {
   id: string;
   url: string;
@@ -11,6 +13,7 @@ type TranscriptItem = {
   agentName: string;
   leadPhone: string;
   leadName: string;
+  callType?: CallType;
   size: number;
   uploadedAt: string;
 };
@@ -22,11 +25,26 @@ type TranscriptDetail = {
   leadPhone: string;
   startedAt: number;
   uploadedAt: number;
-  transcript: string;
-  summary: string;
+  transcript?: string;
+  summary?: string;
   clientCallId?: number;
   /** 통화 길이 (초). 신버전 앱부터 채워서 업로드. 없을 수 있음. */
   durationSec?: number;
+  callType?: CallType;
+};
+
+const CALL_TYPE_LABEL: Record<CallType, string> = {
+  RECORDED: "녹음",
+  NO_ANSWER: "미응답",
+  MISSED: "부재중",
+  REJECTED: "거절",
+};
+
+const CALL_TYPE_COLOR: Record<CallType, { bg: string; fg: string }> = {
+  RECORDED: { bg: "#e0f2fe", fg: "#075985" },     // 파랑 (기본)
+  NO_ANSWER: { bg: "#f1f5f9", fg: "#475569" },    // 회색
+  MISSED: { bg: "#fed7aa", fg: "#9a3412" },       // 주황
+  REJECTED: { bg: "#fecaca", fg: "#991b1b" },     // 빨강
 };
 
 function formatDuration(sec: number | null | undefined): string {
@@ -76,6 +94,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filterAgent, setFilterAgent] = useState("");
+  const [filterType, setFilterType] = useState<"" | CallType>("");
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("list");
@@ -164,7 +183,7 @@ export default function AdminPage() {
       lines.push("");
     }
     lines.push("## 전문");
-    lines.push(d.transcript);
+    lines.push(d.transcript ?? "");
     const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -177,9 +196,23 @@ export default function AdminPage() {
   const agentOptions = Array.from(
     new Set((items ?? []).map((it) => it.agentName).filter(Boolean)),
   ).sort();
-  const list = (items ?? []).filter((it) =>
-    filterAgent ? it.agentName === filterAgent : true,
-  );
+  const list = (items ?? []).filter((it) => {
+    if (filterAgent && it.agentName !== filterAgent) return false;
+    if (filterType) {
+      const t = it.callType ?? "RECORDED";
+      if (t !== filterType) return false;
+    }
+    return true;
+  });
+  const typeCounts: Record<CallType, number> = {
+    RECORDED: 0,
+    NO_ANSWER: 0,
+    MISSED: 0,
+    REJECTED: 0,
+  };
+  for (const it of items ?? []) {
+    typeCounts[it.callType ?? "RECORDED"] += 1;
+  }
   const dueAlertCount = (alerts ?? []).filter(
     (a) => a.state === "past" || a.state === "imminent",
   ).length;
@@ -204,6 +237,17 @@ export default function AdminPage() {
             {agentOptions.map((a) => (
               <option key={a} value={a}>{a}</option>
             ))}
+          </select>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value as "" | CallType)}
+            style={styles.select}
+          >
+            <option value="">통화 유형 전체</option>
+            <option value="RECORDED">녹음 ({typeCounts.RECORDED})</option>
+            <option value="NO_ANSWER">미응답 ({typeCounts.NO_ANSWER})</option>
+            <option value="MISSED">부재중 ({typeCounts.MISSED})</option>
+            <option value="REJECTED">거절 ({typeCounts.REJECTED})</option>
           </select>
           <label style={styles.autoRefreshLabel} title="20초 간격 자동 갱신">
             <input
@@ -270,6 +314,7 @@ export default function AdminPage() {
                 {list.map((it) => {
                   const leadName = it.leadName && it.leadName !== "-" ? it.leadName : "";
                   const agent = it.agentName || "-";
+                  const ct: CallType = it.callType ?? "RECORDED";
                   return (
                     <li
                       key={it.id}
@@ -282,6 +327,17 @@ export default function AdminPage() {
                       <div style={styles.listItemTop}>
                         <strong>{leadName || "(이름 없음)"}</strong>
                         <span style={styles.listItemPhone}>{formatPhone(it.leadPhone)}</span>
+                        {ct !== "RECORDED" && (
+                          <span
+                            style={{
+                              ...styles.callTypeBadge,
+                              background: CALL_TYPE_COLOR[ct].bg,
+                              color: CALL_TYPE_COLOR[ct].fg,
+                            }}
+                          >
+                            {CALL_TYPE_LABEL[ct]}
+                          </span>
+                        )}
                       </div>
                       <div style={styles.listItemMeta}>
                         {formatDate(it.startedAt)} · 상담사 {agent}
@@ -404,12 +460,26 @@ function StateBadge({ state }: { state: AlertState }) {
 }
 
 function Detail({ d, onDownload }: { d: TranscriptDetail; onDownload: () => void }) {
+  const ct: CallType = d.callType ?? "RECORDED";
+  const isRecorded = ct === "RECORDED";
   return (
     <div>
       <div style={styles.detailHeader}>
         <div>
-          <h3 style={{ margin: 0, fontSize: 18 }}>
+          <h3 style={{ margin: 0, fontSize: 18, display: "flex", alignItems: "center", gap: 8 }}>
             {d.leadName || "(이름 없음)"} · {formatPhone(d.leadPhone)}
+            {!isRecorded && (
+              <span
+                style={{
+                  ...styles.callTypeBadge,
+                  background: CALL_TYPE_COLOR[ct].bg,
+                  color: CALL_TYPE_COLOR[ct].fg,
+                  fontSize: 12,
+                }}
+              >
+                {CALL_TYPE_LABEL[ct]}
+              </span>
+            )}
           </h3>
           <div style={{ color: "#666", fontSize: 13, marginTop: 4 }}>
             상담사 <strong>{d.agentName}</strong> · 통화 {formatDate(d.startedAt)} · 업로드 {formatDate(d.uploadedAt)}
@@ -418,20 +488,39 @@ function Detail({ d, onDownload }: { d: TranscriptDetail; onDownload: () => void
             )}
           </div>
         </div>
-        <button onClick={onDownload} style={styles.btn}>전문+요약 다운로드</button>
+        {isRecorded && (
+          <button onClick={onDownload} style={styles.btn}>전문+요약 다운로드</button>
+        )}
       </div>
 
-      {d.summary && (
+      {!isRecorded ? (
         <div style={styles.contentBox}>
-          <h4 style={styles.sectionTitle}>요약</h4>
-          <pre style={styles.summary}>{d.summary}</pre>
+          <div style={styles.nonRecordedBox}>
+            <p style={{ margin: 0, fontWeight: 600 }}>
+              {ct === "NO_ANSWER" && "발신했으나 상대가 받지 않았습니다."}
+              {ct === "MISSED" && "수신 통화를 받지 못했습니다 (부재중)."}
+              {ct === "REJECTED" && "수신 통화를 거절했습니다."}
+            </p>
+            <p style={{ margin: "8px 0 0", color: "#64748b", fontSize: 13 }}>
+              녹음 파일이 생성되지 않아 전사·요약이 없습니다.
+            </p>
+          </div>
         </div>
-      )}
+      ) : (
+        <>
+          {d.summary && (
+            <div style={styles.contentBox}>
+              <h4 style={styles.sectionTitle}>요약</h4>
+              <pre style={styles.summary}>{d.summary}</pre>
+            </div>
+          )}
 
-      <div style={styles.contentBox}>
-        <h4 style={styles.sectionTitle}>전문</h4>
-        <pre style={styles.transcript}>{d.transcript || "(없음)"}</pre>
-      </div>
+          <div style={styles.contentBox}>
+            <h4 style={styles.sectionTitle}>전문</h4>
+            <pre style={styles.transcript}>{d.transcript || "(없음)"}</pre>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -481,12 +570,25 @@ const styles: Record<string, CSSProperties> = {
   listItemTop: {
     marginBottom: 4,
     display: "flex",
-    justifyContent: "space-between",
+    flexWrap: "wrap",
     alignItems: "baseline",
     gap: 8,
   },
   listItemPhone: { color: "#475569", fontSize: 12, fontVariantNumeric: "tabular-nums" },
   listItemMeta: { color: "#64748b", fontSize: 12 },
+  callTypeBadge: {
+    padding: "2px 8px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+  },
+  nonRecordedBox: {
+    padding: 20,
+    background: "#fafafa",
+    border: "1px dashed #cbd5e1",
+    borderRadius: 8,
+  },
   select: {
     padding: "8px 10px",
     border: "1px solid #cbd5e1",

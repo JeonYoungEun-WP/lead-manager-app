@@ -57,4 +57,14 @@ data class CallRecord(
 
     /** 업로드 실패 사유 (uploadStatus=FAILED) */
     val uploadError: String? = null,
+
+    /**
+     * 통화 유형 - RECORDED / NO_ANSWER / MISSED / REJECTED.
+     *  - RECORDED:   녹음 + 전사 정상. 기본값.
+     *  - NO_ANSWER:  발신했으나 상대 미응답 (CallLog OUTGOING + duration=0).
+     *  - MISSED:     수신 부재중 (CallLog MISSED).
+     *  - REJECTED:   수신 거절 (CallLog REJECTED).
+     * 비-RECORDED 는 transcript/summary 가 없고 status=NO_TRANSCRIPT 로 박힌다.
+     */
+    val callType: String = "RECORDED",
 )

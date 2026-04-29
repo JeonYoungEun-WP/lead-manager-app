@@ -38,8 +38,13 @@ type BlobMeta = {
   startedAt: number;
 };
 
+// v3: callType 포함 — {startedAt}_{agent}_{phone}_{name}_{callType}_{uuid}.json
+const V3_PATH_RE =
+  /transcripts\/[^/]+\/(\d+)_([^_/]+)_([^_/]+)_([^_/]+)_(RECORDED|NO_ANSWER|MISSED|REJECTED)_([0-9a-f-]{36})\.json$/i;
+// v2: 메타만 — {startedAt}_{agent}_{phone}_{name}_{uuid}.json (callType 없음, RECORDED 가정)
 const NEW_PATH_RE =
   /transcripts\/[^/]+\/(\d+)_([^_/]+)_([^_/]+)_([^_/]+)_([0-9a-f-]{36})\.json$/i;
+// v1: 메타 일체 미보유 — {startedAt}-{uuid}.json
 const OLD_PATH_RE = /transcripts\/[^/]+\/(\d+)-([0-9a-f-]{36})\.json$/i;
 
 function decodeMeta(s: string): string {
@@ -59,6 +64,16 @@ type ParsedMeta = {
 };
 
 function parsePath(pathname: string): ParsedMeta | null {
+  const mV3 = pathname.match(V3_PATH_RE);
+  if (mV3) {
+    return {
+      id: mV3[6],
+      startedAt: Number(mV3[1]),
+      agentName: decodeMeta(mV3[2]),
+      leadPhone: decodeMeta(mV3[3]),
+      leadName: decodeMeta(mV3[4]),
+    };
+  }
   const mNew = pathname.match(NEW_PATH_RE);
   if (mNew) {
     return {

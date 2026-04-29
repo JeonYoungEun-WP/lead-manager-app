@@ -131,6 +131,7 @@ class SttWorker(
             .put("transcript", transcript)
             .put("summary", summary)
             .put("clientCallId", clientCallId)
+            .put("callType", "RECORDED")
             .apply { if (durationSec != null && durationSec > 0) put("durationSec", durationSec) }
             .toString()
         val req = Request.Builder()

@@ -28,7 +28,7 @@ class LeadApp : Application() {
             "lead-app.db"
         )
             // 명시적 마이그레이션 우선 — 기존 사용자의 리드/통화기록 보존.
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             // 미리 정의되지 않은 다운그레이드/스키마 불일치 안전망 (베타 단계).
             .fallbackToDestructiveMigration(true)
             .build()

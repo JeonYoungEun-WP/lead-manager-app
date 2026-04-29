@@ -14,6 +14,17 @@ object CallLogResolver {
 
     private const val WINDOW_MS = 5 * 60 * 1000L
 
+    /**
+     * CallLog 한 항목 — callType 분류용.
+     * callType: "RECORDED" / "NO_ANSWER" / "MISSED" / "REJECTED"
+     */
+    data class Entry(
+        val phone: String,
+        val date: Long,
+        val durationSec: Int,
+        val callType: String,
+    )
+
     fun hasPermission(ctx: Context): Boolean =
         ctx.checkSelfPermission(Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
 
@@ -44,5 +55,46 @@ object CallLogResolver {
             return best
         }
         return null
+    }
+
+    /**
+     * 최근 N분 내의 CallLog 항목들을 통화유형 분류와 함께 반환.
+     * fromMs 이상의 항목만 가져옴. 정렬: 시간 ASC.
+     * 권한 없으면 빈 리스트.
+     */
+    fun listEntriesSince(ctx: Context, fromMs: Long): List<Entry> {
+        if (!hasPermission(ctx)) return emptyList()
+        val cols = arrayOf(
+            CallLog.Calls.NUMBER,
+            CallLog.Calls.DATE,
+            CallLog.Calls.DURATION,
+            CallLog.Calls.TYPE,
+        )
+        val selection = "${CallLog.Calls.DATE} >= ?"
+        val args = arrayOf(fromMs.toString())
+        val out = mutableListOf<Entry>()
+        ctx.contentResolver.query(
+            CallLog.Calls.CONTENT_URI, cols, selection, args,
+            "${CallLog.Calls.DATE} ASC",
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val number = c.getString(0) ?: continue
+                val date = c.getLong(1)
+                val durSec = c.getInt(2)
+                val type = c.getInt(3)
+                val callType = classifyCallType(type, durSec)
+                out += Entry(number, date, durSec, callType)
+            }
+        }
+        return out
+    }
+
+    /** CallLog.Calls.TYPE + duration 으로 우리 시스템의 callType 분류. */
+    private fun classifyCallType(callLogType: Int, durationSec: Int): String = when (callLogType) {
+        CallLog.Calls.MISSED_TYPE -> "MISSED"
+        CallLog.Calls.REJECTED_TYPE -> "REJECTED"
+        CallLog.Calls.OUTGOING_TYPE -> if (durationSec <= 0) "NO_ANSWER" else "RECORDED"
+        CallLog.Calls.INCOMING_TYPE -> "RECORDED"
+        else -> "RECORDED" // VOICEMAIL/BLOCKED 등은 일단 RECORDED 로 묶음 (드뭄)
     }
 }

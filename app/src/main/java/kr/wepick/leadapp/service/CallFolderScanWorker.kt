@@ -91,6 +91,43 @@ class CallFolderScanWorker(
             }
         }
 
+        // 5. CallLog 스캔 — 녹음 파일이 안 만들어지는 통화 (미응답/부재중/거절) 도 잡는다.
+        //    리드 DB 매칭되는 항목만 NO_TRANSCRIPT 상태 CallRecord 로 등록 + 즉시 업로드 큐잉.
+        if (CallLogResolver.hasPermission(applicationContext)) {
+            val sinceMs = System.currentTimeMillis() - CALLLOG_LOOKBACK_MS
+            val entries = CallLogResolver.listEntriesSince(applicationContext, sinceMs)
+            for (e in entries) {
+                if (e.callType == "RECORDED") continue // 녹음된 건은 폴더 스캔 경로가 처리
+                val phoneNorm = PhoneUtils.normalize(e.phone)
+                if (phoneNorm.isBlank()) continue
+                val lead = repo.findLeadByPhone(phoneNorm) ?: continue
+                val sentinel = "calllog:${e.date}" // CallLog DATE 는 ms epoch — 사실상 unique
+                if (repo.hasCallForFileUri(sentinel)) continue
+
+                val direction = when (e.callType) {
+                    "MISSED", "REJECTED" -> "INCOMING"
+                    "NO_ANSWER" -> "OUTGOING"
+                    else -> "UNKNOWN"
+                }
+                val record = CallRecord(
+                    leadId = lead.id,
+                    phone = phoneNorm,
+                    fileUri = sentinel,
+                    startedAt = e.date,
+                    durationSec = e.durationSec.takeIf { it > 0 },
+                    direction = direction,
+                    status = "NO_TRANSCRIPT",
+                    callType = e.callType,
+                )
+                val id = repo.saveCallIfNew(record)
+                if (id != null) {
+                    Log.i(TAG, "비전사 통화 등록 (${e.callType}): ${lead.name}/$phoneNorm @${e.date}")
+                    // 즉시 업로드 큐잉 — UploadRetryWorker 가 transcript 없이도 처리.
+                    UploadRetryWorker.enqueueImmediate(applicationContext, id)
+                }
+            }
+        }
+
         // 새로 추가됐거나, 기존 PENDING/FAILED (방금 좀비에서 복구된 것 포함) 가 있으면 STT 트리거
         if (added > 0 || repo.pendingCalls().isNotEmpty()) {
             val sttWork = OneTimeWorkRequestBuilder<SttWorker>()
@@ -113,5 +150,8 @@ class CallFolderScanWorker(
         const val SCAN_WORK_NAME = "call-folder-scan"
         const val STT_WORK_NAME = "stt-process"
         private const val TAG = "CallFolderScanWorker"
+
+        /** CallLog 스캔 시 거슬러 올라갈 시간 — 최근 24시간 이내 항목만 본다 (옛날 건은 무시). */
+        private const val CALLLOG_LOOKBACK_MS = 24L * 60 * 60 * 1000L
     }
 }

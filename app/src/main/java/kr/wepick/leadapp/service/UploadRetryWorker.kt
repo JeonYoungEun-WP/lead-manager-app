@@ -62,8 +62,9 @@ class UploadRetryWorker(
             Log.i(TAG, "callId=$callId 이미 업로드 완료 — 스킵")
             return Result.success()
         }
-        if (call.transcript.isNullOrBlank()) {
-            Log.w(TAG, "callId=$callId transcript 비어있음 — 업로드 불가")
+        // RECORDED 만 transcript 필수. NO_ANSWER / MISSED / REJECTED 는 transcript 없이 업로드 가능.
+        if (call.callType == "RECORDED" && call.transcript.isNullOrBlank()) {
+            Log.w(TAG, "callId=$callId RECORDED 인데 transcript 비어있음 — STT 미완료 상태")
             repo.markUploadFailed(callId, "transcript 없음 — STT 미완료 상태 재시도 불가")
             return Result.success()
         }
@@ -91,10 +92,11 @@ class UploadRetryWorker(
                     leadName = leadName,
                     leadPhone = call.phone,
                     startedAt = call.startedAt,
-                    transcript = call.transcript,
+                    transcript = call.transcript.orEmpty(),
                     summary = call.summary.orEmpty(),
                     clientCallId = call.id,
                     durationSec = call.durationSec,
+                    callType = call.callType,
                 )
             }
         }
@@ -143,16 +145,20 @@ class UploadRetryWorker(
         summary: String,
         clientCallId: Long,
         durationSec: Int?,
+        callType: String,
     ) {
         val body = JSONObject()
             .put("agentName", agentName)
             .put("leadName", leadName)
             .put("leadPhone", leadPhone)
             .put("startedAt", startedAt)
-            .put("transcript", transcript)
-            .put("summary", summary)
             .put("clientCallId", clientCallId)
-            .apply { if (durationSec != null && durationSec > 0) put("durationSec", durationSec) }
+            .put("callType", callType)
+            .apply {
+                if (transcript.isNotBlank()) put("transcript", transcript)
+                if (summary.isNotBlank()) put("summary", summary)
+                if (durationSec != null && durationSec > 0) put("durationSec", durationSec)
+            }
             .toString()
         val req = Request.Builder()
             .url("$backendUrl/api/transcripts")

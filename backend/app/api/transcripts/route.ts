@@ -34,16 +34,30 @@ function decodeMeta(s: string): string {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * 통화 유형.
+ * - RECORDED: 정상적으로 통화 연결되어 녹음 + 전사된 케이스 (기본).
+ * - NO_ANSWER: 발신했으나 상대 미응답 (CallLog OUTGOING + duration=0).
+ * - MISSED: 수신했으나 받지 못함 (CallLog MISSED).
+ * - REJECTED: 수신 거절 (CallLog REJECTED).
+ * NO_ANSWER/MISSED/REJECTED 는 녹음 파일이 없으므로 transcript / summary 가 비어있다.
+ */
+type CallType = "RECORDED" | "NO_ANSWER" | "MISSED" | "REJECTED";
+
 type TranscriptPayload = {
   agentName: string;
   leadName?: string;
   leadPhone: string;
   startedAt: number;
-  transcript: string;
-  summary: string;
+  /** 비-RECORDED 통화는 비어있을 수 있음. */
+  transcript?: string;
+  /** 비-RECORDED 통화는 비어있을 수 있음. */
+  summary?: string;
   clientCallId?: number;
-  /** 통화 길이 (초). 앱이 MediaMetadataRetriever 로 추출했거나, 이미 알고 있을 때만 채워 보냄. */
+  /** 통화 길이 (초). 앱이 MediaMetadataRetriever 또는 CallLog.duration 으로 채움. */
   durationSec?: number;
+  /** 통화 유형 — 미지정시 RECORDED 로 간주 (구버전 클라이언트 호환). */
+  callType?: CallType;
 };
 
 /**
@@ -103,12 +117,15 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "JSON 파싱 실패" }, { status: 400 });
   }
-  const required: (keyof TranscriptPayload)[] = [
-    "agentName",
-    "leadPhone",
-    "startedAt",
-    "transcript",
-  ];
+  // callType 정규화 (구버전 클라이언트 호환)
+  const callType: CallType = body.callType ?? "RECORDED";
+  body.callType = callType;
+
+  // RECORDED 만 transcript 필수, 비-RECORDED 는 transcript 생략 허용.
+  const required: (keyof TranscriptPayload)[] =
+    callType === "RECORDED"
+      ? ["agentName", "leadPhone", "startedAt", "transcript"]
+      : ["agentName", "leadPhone", "startedAt"];
   for (const k of required) {
     if (!body[k]) return NextResponse.json({ error: `${k} 필드 누락` }, { status: 400 });
   }
@@ -135,7 +152,10 @@ export async function POST(req: NextRequest) {
   const agentEnc = encodeMeta(agentName);
   const phoneEnc = encodeMeta(body.leadPhone);
   const nameEnc = encodeMeta(body.leadName || "-");
-  const path = `transcripts/${ym}/${body.startedAt}${SEP}${agentEnc}${SEP}${phoneEnc}${SEP}${nameEnc}${SEP}${id}.json`;
+  // 신 포맷 (v3): {startedAt}_{agent}_{phone}_{name}_{callType}_{uuid}.json
+  // callType 토큰들 (RECORDED|NO_ANSWER|MISSED|REJECTED) 은 [A-Z_]+ 패턴이라
+  // 인접한 [^_/]+ greedy 매칭과 충돌하지 않음 (정규식 alternation 으로 정확 매칭).
+  const path = `transcripts/${ym}/${body.startedAt}${SEP}${agentEnc}${SEP}${phoneEnc}${SEP}${nameEnc}${SEP}${callType}${SEP}${id}.json`;
 
   try {
     const blob = await put(path, JSON.stringify(record), {
@@ -159,36 +179,56 @@ export async function GET(_req: NextRequest) {
     const { blobs } = await list({ prefix: "transcripts/", limit: 500 });
     const items = blobs
       .map((b) => {
-        // 신 포맷: transcripts/YYYY-MM/{startedAt}_{agentEnc}_{phoneEnc}_{nameEnc}_{uuid}.json
-        const mNew = b.pathname.match(
-          /transcripts\/[^/]+\/(\d+)_([^_/]+)_([^_/]+)_([^_/]+)_([0-9a-f-]{36})\.json$/i,
+        // v3 (현행): {startedAt}_{agent}_{phone}_{name}_{callType}_{uuid}.json
+        const mV3 = b.pathname.match(
+          /transcripts\/[^/]+\/(\d+)_([^_/]+)_([^_/]+)_([^_/]+)_(RECORDED|NO_ANSWER|MISSED|REJECTED)_([0-9a-f-]{36})\.json$/i,
         );
-        if (mNew) {
+        if (mV3) {
           return {
-            id: mNew[5],
+            id: mV3[6],
             url: b.url,
             pathname: b.pathname,
-            startedAt: Number(mNew[1]),
-            agentName: decodeMeta(mNew[2]),
-            leadPhone: decodeMeta(mNew[3]),
-            leadName: decodeMeta(mNew[4]),
+            startedAt: Number(mV3[1]),
+            agentName: decodeMeta(mV3[2]),
+            leadPhone: decodeMeta(mV3[3]),
+            leadName: decodeMeta(mV3[4]),
+            callType: mV3[5].toUpperCase() as CallType,
             size: b.size,
             uploadedAt: b.uploadedAt,
           };
         }
-        // 구 포맷: transcripts/YYYY-MM/{startedAt}-{uuid}.json — 메타 미보유
-        const mOld = b.pathname.match(
-          /transcripts\/[^/]+\/(\d+)-([0-9a-f-]{36})\.json$/i,
+        // v2: {startedAt}_{agent}_{phone}_{name}_{uuid}.json — callType 정보 없음 → RECORDED 가정
+        const mV2 = b.pathname.match(
+          /transcripts\/[^/]+\/(\d+)_([^_/]+)_([^_/]+)_([^_/]+)_([0-9a-f-]{36})\.json$/i,
         );
-        if (mOld) {
+        if (mV2) {
           return {
-            id: mOld[2],
+            id: mV2[5],
             url: b.url,
             pathname: b.pathname,
-            startedAt: Number(mOld[1]),
+            startedAt: Number(mV2[1]),
+            agentName: decodeMeta(mV2[2]),
+            leadPhone: decodeMeta(mV2[3]),
+            leadName: decodeMeta(mV2[4]),
+            callType: "RECORDED" as CallType,
+            size: b.size,
+            uploadedAt: b.uploadedAt,
+          };
+        }
+        // v1 (legacy): {startedAt}-{uuid}.json — 메타 일체 미보유
+        const mV1 = b.pathname.match(
+          /transcripts\/[^/]+\/(\d+)-([0-9a-f-]{36})\.json$/i,
+        );
+        if (mV1) {
+          return {
+            id: mV1[2],
+            url: b.url,
+            pathname: b.pathname,
+            startedAt: Number(mV1[1]),
             agentName: "",
             leadPhone: "",
             leadName: "",
+            callType: "RECORDED" as CallType,
             size: b.size,
             uploadedAt: b.uploadedAt,
           };
