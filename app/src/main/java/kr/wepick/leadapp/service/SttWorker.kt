@@ -1,6 +1,7 @@
 package kr.wepick.leadapp.service
 
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
 import androidx.work.CoroutineWorker
@@ -84,12 +85,14 @@ class SttWorker(
                 repo.setCallResult(call.id, transcript, summary)
 
                 // 어드민 업로드 (실패해도 로컬 저장은 유지, 실패 사유는 uploadError 에 기록)
+                val durationSec = call.durationSec
+                    ?: extractDurationSec(applicationContext, Uri.parse(call.fileUri))
                 val uploadResult = runCatching {
                     withContext(Dispatchers.IO) {
                         val leadName = call.leadId?.let { repo.getLead(it)?.name }.orEmpty()
                         uploadTranscript(
                             http, backendUrl, agentName, leadName, call.phone,
-                            call.startedAt, transcript, summary, call.id,
+                            call.startedAt, transcript, summary, call.id, durationSec,
                         )
                     }
                 }
@@ -97,6 +100,8 @@ class SttWorker(
                     onSuccess = { repo.markUploadOk(call.id) },
                     onFailure = { e ->
                         repo.markUploadFailed(call.id, e.message?.take(500) ?: "unknown")
+                        // 자동 재시도 — 1분 뒤 attempt=1 시작. 실패 시 5분/30분/24시간 백오프.
+                        UploadRetryWorker.enqueueAuto(applicationContext, call.id)
                     },
                 )
             } catch (e: Exception) {
@@ -116,6 +121,7 @@ class SttWorker(
         transcript: String,
         summary: String,
         clientCallId: Long,
+        durationSec: Int?,
     ) {
         val body = JSONObject()
             .put("agentName", agentName.ifBlank { "unknown" })
@@ -125,6 +131,7 @@ class SttWorker(
             .put("transcript", transcript)
             .put("summary", summary)
             .put("clientCallId", clientCallId)
+            .apply { if (durationSec != null && durationSec > 0) put("durationSec", durationSec) }
             .toString()
         val req = Request.Builder()
             .url("$backendUrl/api/transcripts")
@@ -154,6 +161,25 @@ class SttWorker(
     private fun extractFilename(uri: String): String? {
         val segment = Uri.parse(uri).lastPathSegment ?: return null
         return segment.substringAfterLast('/').ifBlank { null }
+    }
+
+    /**
+     * 오디오 파일에서 통화 길이(초) 추출. 실패하면 null.
+     * MediaMetadataRetriever 는 SAF content URI 도 지원.
+     */
+    private fun extractDurationSec(ctx: Context, fileUri: Uri): Int? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(ctx, fileUri)
+            val ms = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull() ?: return null
+            (ms / 1000).toInt().takeIf { it > 0 }
+        } catch (e: Exception) {
+            Log.w(TAG, "duration 추출 실패: ${e.message}")
+            null
+        } finally {
+            runCatching { retriever.release() }
+        }
     }
 
     private fun fetchSummary(

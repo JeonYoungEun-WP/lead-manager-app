@@ -25,7 +25,16 @@ type TranscriptDetail = {
   transcript: string;
   summary: string;
   clientCallId?: number;
+  /** 통화 길이 (초). 신버전 앱부터 채워서 업로드. 없을 수 있음. */
+  durationSec?: number;
 };
+
+function formatDuration(sec: number | null | undefined): string {
+  if (sec == null || sec <= 0) return "-";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}분 ${s.toString().padStart(2, "0")}초`;
+}
 
 type AlertState = "past" | "imminent" | "future" | "undated";
 
@@ -404,6 +413,9 @@ function Detail({ d, onDownload }: { d: TranscriptDetail; onDownload: () => void
           </h3>
           <div style={{ color: "#666", fontSize: 13, marginTop: 4 }}>
             상담사 <strong>{d.agentName}</strong> · 통화 {formatDate(d.startedAt)} · 업로드 {formatDate(d.uploadedAt)}
+            {d.durationSec != null && d.durationSec > 0 && (
+              <> · 길이 <strong>{formatDuration(d.durationSec)}</strong></>
+            )}
           </div>
         </div>
         <button onClick={onDownload} style={styles.btn}>전문+요약 다운로드</button>

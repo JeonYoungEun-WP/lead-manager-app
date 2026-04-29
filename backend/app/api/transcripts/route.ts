@@ -42,7 +42,50 @@ type TranscriptPayload = {
   transcript: string;
   summary: string;
   clientCallId?: number;
+  /** 통화 길이 (초). 앱이 MediaMetadataRetriever 로 추출했거나, 이미 알고 있을 때만 채워 보냄. */
+  durationSec?: number;
 };
+
+/**
+ * 같은 통화가 이미 업로드됐는지 검사 — (startedAt, clientCallId, agentName) 조합으로 식별.
+ * 일치하면 기존 record 반환 → 클라이언트 재시도 시 멱등성 보장.
+ *
+ * 비고: blob storage prefix list 는 효율적이지만 record JSON 을 fetch 해야 clientCallId 비교 가능.
+ *       동일 startedAt 의 blob 은 거의 0개거나 매우 소수라서 N+1 비용은 무시 가능.
+ */
+async function findExistingDuplicate(
+  ym: string,
+  startedAt: number,
+  clientCallId: number | undefined,
+  agentName: string,
+): Promise<{ id: string; url: string; uploadedAt: number } | null> {
+  if (clientCallId == null) return null; // clientCallId 없으면 idempotency 검사 skip (구버전 클라이언트 호환)
+  const { blobs } = await list({
+    prefix: `transcripts/${ym}/${startedAt}${SEP}`,
+    limit: 20,
+  });
+  for (const b of blobs) {
+    try {
+      const res = await fetch(b.url, { cache: "no-store" });
+      if (!res.ok) continue;
+      const json = (await res.json()) as Partial<TranscriptPayload> & {
+        id?: string;
+        uploadedAt?: number;
+        clientCallId?: number;
+      };
+      if (json.clientCallId === clientCallId && json.agentName === agentName && json.id) {
+        return {
+          id: json.id,
+          url: b.url,
+          uploadedAt: json.uploadedAt ?? Date.now(),
+        };
+      }
+    } catch {
+      // 한 건 fetch 실패해도 다음 blob 시도. 모두 실패하면 신규 업로드.
+    }
+  }
+  return null;
+}
 
 export async function POST(req: NextRequest) {
   const authErr = requireAppToken(req);
@@ -70,13 +113,26 @@ export async function POST(req: NextRequest) {
     if (!body[k]) return NextResponse.json({ error: `${k} 필드 누락` }, { status: 400 });
   }
 
+  const date = new Date(body.startedAt);
+  const ym = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const agentName = body.agentName || "unknown";
+
+  // Idempotency: 같은 (startedAt, clientCallId, agent) 조합이 이미 있으면 기존 결과 반환.
+  const existing = await findExistingDuplicate(ym, body.startedAt, body.clientCallId, agentName);
+  if (existing) {
+    return NextResponse.json({
+      id: existing.id,
+      url: existing.url,
+      uploadedAt: existing.uploadedAt,
+      deduped: true,
+    });
+  }
+
   const id = crypto.randomUUID();
   const uploadedAt = Date.now();
   const record = { id, ...body, uploadedAt };
 
-  const date = new Date(body.startedAt);
-  const ym = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-  const agentEnc = encodeMeta(body.agentName || "unknown");
+  const agentEnc = encodeMeta(agentName);
   const phoneEnc = encodeMeta(body.leadPhone);
   const nameEnc = encodeMeta(body.leadName || "-");
   const path = `transcripts/${ym}/${body.startedAt}${SEP}${agentEnc}${SEP}${phoneEnc}${SEP}${nameEnc}${SEP}${id}.json`;

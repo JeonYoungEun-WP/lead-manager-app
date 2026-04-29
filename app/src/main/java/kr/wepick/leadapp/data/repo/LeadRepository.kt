@@ -59,6 +59,14 @@ class LeadRepository(
     suspend fun markUploadFailed(id: Long, err: String) =
         callRecordDao.updateUploadState(id, "FAILED", err)
 
+    /**
+     * 사용자(또는 SttWorker) 가 호출하는 단일 callId 업로드 재시도 진입점.
+     * UploadRetryWorker 가 attempt 횟수 추적 + 백오프 자동 처리.
+     */
+    fun retryUpload(ctx: android.content.Context, callId: Long) {
+        kr.wepick.leadapp.service.UploadRetryWorker.enqueueImmediate(ctx, callId)
+    }
+
     suspend fun pendingCalls(): List<CallRecord> = callRecordDao.pendingForProcessing()
 
     /** 죽은 워커가 남긴 PROCESSING 좀비 레코드를 PENDING 으로 복구. */

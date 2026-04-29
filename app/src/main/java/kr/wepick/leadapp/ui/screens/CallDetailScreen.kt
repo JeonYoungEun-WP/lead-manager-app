@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kr.wepick.leadapp.LeadApp
@@ -104,6 +105,10 @@ fun CallDetailScreen(
 
 @Composable
 private fun UploadStatusCard(c: CallRecord) {
+    val context = LocalContext.current
+    val repo = remember { LeadApp.instance.leadRepo }
+    var clickedAt by remember { mutableStateOf<Long?>(null) }
+
     val (label, color) = when (c.uploadStatus) {
         "OK" -> "어드민 업로드 완료" to MaterialTheme.colorScheme.primary
         "FAILED" -> "어드민 업로드 실패" to MaterialTheme.colorScheme.error
@@ -119,6 +124,23 @@ private fun UploadStatusCard(c: CallRecord) {
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                 )
+            }
+            if (c.uploadStatus == "FAILED" && !c.transcript.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = {
+                    repo.retryUpload(context, c.id)
+                    clickedAt = System.currentTimeMillis()
+                }) {
+                    Text("재업로드")
+                }
+                clickedAt?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "재시도를 큐잉했습니다. 잠시 후 화면을 새로고침해 결과를 확인하세요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
         }
     }
