@@ -59,6 +59,20 @@ interface CallRecordDao {
     @Query("UPDATE call_records SET fileUri = :fileUri, status = 'PENDING' WHERE id = :id")
     suspend fun attachFile(id: Long, fileUri: String)
 
+    /**
+     * 발신 stub (AWAITING_FILE/RECORDED) 을 미응답으로 확정 변환.
+     * OutgoingCallVerifyWorker 가 발신 후 60초 검증으로 호출.
+     */
+    @Query(
+        "UPDATE call_records SET fileUri = :fileUri, status = 'NO_TRANSCRIPT', " +
+        "callType = 'NO_ANSWER', direction = 'OUTGOING', durationSec = :durationSec " +
+        "WHERE id = :id"
+    )
+    suspend fun convertStubToNoAnswer(id: Long, fileUri: String, durationSec: Int)
+
+    @Query("UPDATE call_records SET durationSec = :durationSec WHERE id = :id")
+    suspend fun updateDuration(id: Long, durationSec: Int)
+
     /** 재연락 약속 시각 + 태그 업데이트 (Phase 1). */
     @Query("UPDATE call_records SET callbackAt = :callbackAt, tags = :tags WHERE id = :id")
     suspend fun setCallbackInfo(id: Long, callbackAt: Long?, tags: String?)

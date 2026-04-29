@@ -97,7 +97,12 @@ fun LeadDetailScreen(
                 ) {
                     Button(
                         onClick = {
-                            scope.launch { repo.startOutgoingCall(l.id, l.phone) }
+                            scope.launch {
+                                val callId = repo.startOutgoingCall(l.id, l.phone)
+                                // 60초 후 CallLog 검증 — 미응답이면 즉시 NO_ANSWER 로 확정 + 업로드.
+                                kr.wepick.leadapp.service.OutgoingCallVerifyWorker
+                                    .enqueue(context, callId)
+                            }
                             val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${l.phone}"))
                             try { context.startActivity(intent) } catch (_: Exception) {
                                 // CALL_PHONE 권한 없을 시 DIAL 인텐트로 폴백

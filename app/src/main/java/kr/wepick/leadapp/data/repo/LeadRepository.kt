@@ -105,6 +105,14 @@ class LeadRepository(
     suspend fun attachFileToStub(id: Long, fileUri: String) =
         callRecordDao.attachFile(id, fileUri)
 
+    /** 발신 stub 을 NO_ANSWER 로 확정 변환 (OutgoingCallVerifyWorker 가 호출). */
+    suspend fun convertStubToNoAnswer(id: Long, fileUri: String, durationSec: Int) =
+        callRecordDao.convertStubToNoAnswer(id, fileUri, durationSec)
+
+    /** stub 의 durationSec 만 갱신 (통화 연결됐을 때 길이 정보 미리 채움용). */
+    suspend fun updateStubDuration(id: Long, durationSec: Int) =
+        callRecordDao.updateDuration(id, durationSec)
+
     /** 파일 타임스탬프 근처의 AWAITING_FILE 스텁 찾기. 기본 창 ±30분. */
     suspend fun findAwaitingFileNear(
         fileTs: Long,
