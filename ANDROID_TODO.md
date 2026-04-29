@@ -38,6 +38,18 @@
   - 이미 존재하는 조합이면 기존 Blob URL 반환
 - [ ] 앱 `SttWorker` 에 업로드 진행중 플래그 추가 (동시 호출 방지)
 
+### 2.4 통화 길이(durationSec) 업로드 페이로드 포함
+- [ ] `SttWorker.uploadTranscript` 호출 시 `CallRecord.durationSec` 도 함께 전송
+  - JSON body 에 `"durationSec": Int?` 필드 추가
+- [ ] `durationSec` 이 null 인 경우 `MediaMetadataRetriever` 로 오디오 파일에서 추출 시도 후 업로드
+- [ ] 백엔드 `route.ts`:
+  - `TranscriptPayload` 타입에 `durationSec?: number` 추가
+  - blob 경로에 인코딩하거나 (예: `{startedAt}_{agent}_{phone}_{name}_{duration}_{uuid}.json`) 또는 record JSON 안에만 보존하고 list 응답에서 메타로 노출
+- [ ] 어드민 페이지: 목록·상세 양쪽에 "통화 길이" 컬럼/필드 표시
+- [ ] 옛 포맷 blob 은 `durationSec` 미보유 → "-" 로 표시
+
+> 참고: 이 작업이 완료되기 전까지는 어드민에서 통화 길이가 표시되지 않음. 임시 대안으로 transcript 의 마지막 `[mm:ss]` 타임스탬프를 파싱해 상세 화면에만 어림값 표시하는 방법(옵션 A) 도 있으나, 정확도 한계로 채택하지 않고 본 작업으로 한 번에 처리.
+
 ---
 
 ## 🟢 3. 반응성 개선 — PRD §8 연결
