@@ -113,6 +113,10 @@ class LeadRepository(
     suspend fun updateStubDuration(id: Long, durationSec: Int) =
         callRecordDao.updateDuration(id, durationSec)
 
+    /** 통화 종료 즉시 검증할 가장 최근 AWAITING_FILE stub. */
+    suspend fun findMostRecentAwaitingStub(sinceMs: Long): CallRecord? =
+        callRecordDao.findMostRecentAwaitingStub(sinceMs)
+
     /** 파일 타임스탬프 근처의 AWAITING_FILE 스텁 찾기. 기본 창 ±30분. */
     suspend fun findAwaitingFileNear(
         fileTs: Long,

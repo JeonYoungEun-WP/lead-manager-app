@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit
 import kr.wepick.leadapp.data.db.AppDatabase
 import kr.wepick.leadapp.data.repo.LeadRepository
 import kr.wepick.leadapp.service.CallFolderScanWorker
+import kr.wepick.leadapp.service.CallStateMonitor
 import kr.wepick.leadapp.service.CallbackNotifier
 import kr.wepick.leadapp.service.RecordingsObserver
 import kr.wepick.leadapp.ui.screens.KEY_RECORDINGS_URI
@@ -32,6 +33,7 @@ class LeadApp : Application() {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var observer: RecordingsObserver? = null
+    private var callStateMonitor: CallStateMonitor? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -58,6 +60,8 @@ class LeadApp : Application() {
         bindRecordingsObserver()
         CallbackNotifier.ensureChannel(this)
         rescheduleFutureCallbacks()
+        // 통화 종료 즉시 감지 — OFFHOOK→IDLE 전환 시 발신 stub 검증 워커 즉시 큐잉
+        callStateMonitor = CallStateMonitor(this).also { it.start() }
     }
 
     /**

@@ -73,6 +73,16 @@ interface CallRecordDao {
     @Query("UPDATE call_records SET durationSec = :durationSec WHERE id = :id")
     suspend fun updateDuration(id: Long, durationSec: Int)
 
+    /**
+     * 가장 최근 AWAITING_FILE 스텁 — 통화 종료 직후 검증 워커가 사용.
+     * since 이후 만들어진 stub 만 봄 (오래된 것은 이미 다른 경로로 처리됨).
+     */
+    @Query(
+        "SELECT * FROM call_records WHERE status = 'AWAITING_FILE' AND startedAt >= :since " +
+        "ORDER BY startedAt DESC LIMIT 1"
+    )
+    suspend fun findMostRecentAwaitingStub(since: Long): CallRecord?
+
     /** 재연락 약속 시각 + 태그 업데이트 (Phase 1). */
     @Query("UPDATE call_records SET callbackAt = :callbackAt, tags = :tags WHERE id = :id")
     suspend fun setCallbackInfo(id: Long, callbackAt: Long?, tags: String?)

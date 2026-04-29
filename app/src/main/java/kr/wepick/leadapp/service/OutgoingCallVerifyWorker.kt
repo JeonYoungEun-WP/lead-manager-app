@@ -118,10 +118,22 @@ class OutgoingCallVerifyWorker(
         /** 최대 시도. 1차+재시도 1회 = 총 2분 대기 후 포기. */
         private const val MAX_ATTEMPTS = 2
 
-        /** 발신 직후 호출 — 60초 후 첫 검증. */
+        /** 발신 직후 호출 — 60초 후 첫 검증 (보험). 통화 종료 즉시 감지가 실패할 때 안전망. */
         fun enqueue(ctx: Context, callId: Long) {
             val req = OneTimeWorkRequestBuilder<OutgoingCallVerifyWorker>()
                 .setInitialDelay(INITIAL_DELAY_SEC, TimeUnit.SECONDS)
+                .setInputData(workDataOf(KEY_CALL_ID to callId, KEY_ATTEMPT to 1))
+                .build()
+            WorkManager.getInstance(ctx).enqueue(req)
+        }
+
+        /**
+         * 통화 종료 즉시 호출 — CallStateMonitor 가 OFFHOOK→IDLE 전환 감지 시 사용.
+         * 3초 마진은 Samsung 이 CallLog 에 행을 기록하기까지 걸리는 평균 지연.
+         */
+        fun enqueueImmediate(ctx: Context, callId: Long) {
+            val req = OneTimeWorkRequestBuilder<OutgoingCallVerifyWorker>()
+                .setInitialDelay(3, TimeUnit.SECONDS)
                 .setInputData(workDataOf(KEY_CALL_ID to callId, KEY_ATTEMPT to 1))
                 .build()
             WorkManager.getInstance(ctx).enqueue(req)
