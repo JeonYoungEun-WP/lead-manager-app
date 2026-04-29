@@ -98,6 +98,7 @@ export default function AdminPage() {
   const [filterAgent, setFilterAgent] = useState("");
   const [filterType, setFilterType] = useState<"" | CallType>("");
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [lastRefresh, setLastRefresh] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("list");
   const [alerts, setAlerts] = useState<AlertItem[] | null>(null);
@@ -215,6 +216,58 @@ export default function AdminPage() {
   for (const it of items ?? []) {
     typeCounts[it.callType ?? "RECORDED"] += 1;
   }
+
+  // 리드별 그룹핑 — 같은 leadPhone 의 통화를 한 카드 아래 묶음.
+  type Group = {
+    key: string;
+    leadName: string;
+    leadPhone: string;
+    items: TranscriptItem[];
+    typeCounts: Record<CallType, number>;
+    latestAt: number;
+  };
+  const groupMap = new Map<string, Group>();
+  for (const it of list) {
+    const key = it.leadPhone || `noPhone:${it.id}`;
+    const ct: CallType = it.callType ?? "RECORDED";
+    let g = groupMap.get(key);
+    if (!g) {
+      g = {
+        key,
+        leadName: it.leadName && it.leadName !== "-" ? it.leadName : "",
+        leadPhone: it.leadPhone,
+        items: [],
+        typeCounts: { RECORDED: 0, NO_ANSWER: 0, MISSED: 0, REJECTED: 0 },
+        latestAt: 0,
+      };
+      groupMap.set(key, g);
+    }
+    // 그룹에 더 신뢰성 있는 leadName 이 들어오면 채워둠
+    if (!g.leadName && it.leadName && it.leadName !== "-") g.leadName = it.leadName;
+    g.items.push(it);
+    g.typeCounts[ct] += 1;
+    if (it.startedAt > g.latestAt) g.latestAt = it.startedAt;
+  }
+  const groups: Group[] = Array.from(groupMap.values())
+    .map((g) => ({
+      ...g,
+      items: g.items.slice().sort((a, b) => b.startedAt - a.startedAt),
+    }))
+    .sort((a, b) => b.latestAt - a.latestAt);
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const allExpanded = groups.length > 0 && groups.every((g) => expandedGroups.has(g.key));
+  const toggleAll = () => {
+    if (allExpanded) setExpandedGroups(new Set());
+    else setExpandedGroups(new Set(groups.map((g) => g.key)));
+  };
   const dueAlertCount = (alerts ?? []).filter(
     (a) => a.state === "past" || a.state === "imminent",
   ).length;
@@ -299,13 +352,19 @@ export default function AdminPage() {
 
       {tab === "list" ? (
         <section style={styles.listSection}>
-          <h2 style={styles.h2}>
-            통화 기록 ({list.length}
-            {filterAgent && (items ?? []).length !== list.length
-              ? ` / 전체 ${(items ?? []).length}`
-              : ""}
-            )
-          </h2>
+          <div style={styles.listHeaderRow}>
+            <h2 style={styles.h2}>
+              리드 {groups.length}명 · 통화 {list.length}건
+              {filterAgent && (items ?? []).length !== list.length
+                ? ` (필터 적용 / 전체 ${(items ?? []).length})`
+                : ""}
+            </h2>
+            {groups.length > 0 && (
+              <button onClick={toggleAll} style={styles.btnGhost}>
+                {allExpanded ? "모두 접기" : "모두 펼치기"}
+              </button>
+            )}
+          </div>
           {items === null ? (
             <p style={styles.empty}>불러오는 중…</p>
           ) : items.length === 0 ? (
@@ -313,40 +372,83 @@ export default function AdminPage() {
           ) : (
             <div style={styles.split}>
               <ul style={styles.list}>
-                {list.map((it) => {
-                  const leadName = it.leadName && it.leadName !== "-" ? it.leadName : "";
-                  const agent = it.agentName || "-";
-                  const ct: CallType = it.callType ?? "RECORDED";
+                {groups.map((g) => {
+                  const expanded = expandedGroups.has(g.key);
+                  const counts = g.typeCounts;
                   return (
-                    <li
-                      key={it.id}
-                      onClick={() => fetchDetail(it.id)}
-                      style={{
-                        ...styles.listItem,
-                        ...(it.id === selectedId ? styles.listItemActive : null),
-                      }}
-                    >
-                      <div style={styles.listItemTop}>
-                        <strong>{leadName || "(이름 없음)"}</strong>
-                        <span style={styles.listItemPhone}>{formatPhone(it.leadPhone)}</span>
-                        {ct !== "RECORDED" && (
-                          <span
-                            style={{
-                              ...styles.callTypeBadge,
-                              background: CALL_TYPE_COLOR[ct].bg,
-                              color: CALL_TYPE_COLOR[ct].fg,
-                            }}
-                          >
-                            {CALL_TYPE_LABEL[ct]}
-                          </span>
-                        )}
+                    <li key={g.key} style={styles.groupCard}>
+                      <div
+                        style={styles.groupHeader}
+                        onClick={() => toggleGroup(g.key)}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={styles.groupTitleRow}>
+                            <strong>{g.leadName || "(이름 없음)"}</strong>
+                            <span style={styles.listItemPhone}>{formatPhone(g.leadPhone)}</span>
+                          </div>
+                          <div style={styles.groupMetaRow}>
+                            <span>{g.items.length}건</span>
+                            {(["RECORDED", "NO_ANSWER", "MISSED", "REJECTED"] as CallType[])
+                              .filter((t) => counts[t] > 0)
+                              .map((t) => (
+                                <span
+                                  key={t}
+                                  style={{
+                                    ...styles.callTypeBadge,
+                                    background: CALL_TYPE_COLOR[t].bg,
+                                    color: CALL_TYPE_COLOR[t].fg,
+                                  }}
+                                >
+                                  {CALL_TYPE_LABEL[t]} {counts[t]}
+                                </span>
+                              ))}
+                            <span style={{ color: "#94a3b8", marginLeft: "auto" }}>
+                              최근 {formatDate(g.latestAt)}
+                            </span>
+                          </div>
+                        </div>
+                        <span style={styles.chevron}>{expanded ? "▴" : "▾"}</span>
                       </div>
-                      <div style={styles.listItemMeta}>
-                        {formatDate(it.startedAt)} · 상담사 {agent}
-                        {it.durationSec != null && it.durationSec > 0 && (
-                          <> · {formatDuration(it.durationSec)}</>
-                        )}
-                      </div>
+                      {expanded && (
+                        <ul style={styles.subList}>
+                          {g.items.map((it) => {
+                            const agent = it.agentName || "-";
+                            const ct: CallType = it.callType ?? "RECORDED";
+                            return (
+                              <li
+                                key={it.id}
+                                onClick={() => fetchDetail(it.id)}
+                                style={{
+                                  ...styles.subListItem,
+                                  ...(it.id === selectedId ? styles.listItemActive : null),
+                                }}
+                              >
+                                <div style={styles.subListMain}>
+                                  {formatDate(it.startedAt)}
+                                  {ct !== "RECORDED" && (
+                                    <span
+                                      style={{
+                                        ...styles.callTypeBadge,
+                                        background: CALL_TYPE_COLOR[ct].bg,
+                                        color: CALL_TYPE_COLOR[ct].fg,
+                                        marginLeft: 8,
+                                      }}
+                                    >
+                                      {CALL_TYPE_LABEL[ct]}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={styles.listItemMeta}>
+                                  상담사 {agent}
+                                  {it.durationSec != null && it.durationSec > 0 && (
+                                    <> · {formatDuration(it.durationSec)}</>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
                     </li>
                   );
                 })}
@@ -356,7 +458,7 @@ export default function AdminPage() {
                 {selected ? (
                   <Detail d={selected} onDownload={() => handleDownload(selected)} />
                 ) : (
-                  <p style={styles.empty}>좌측에서 통화를 선택하세요.</p>
+                  <p style={styles.empty}>리드를 펼친 뒤 통화를 선택하세요.</p>
                 )}
               </div>
             </div>
@@ -587,6 +689,65 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 11,
     fontWeight: 600,
     whiteSpace: "nowrap",
+  },
+  listHeaderRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  groupCard: {
+    border: "1px solid #e2e8f0",
+    borderRadius: 8,
+    marginBottom: 8,
+    background: "white",
+    overflow: "hidden",
+  },
+  groupHeader: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    padding: 12,
+    cursor: "pointer",
+  },
+  groupTitleRow: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: 8,
+    marginBottom: 4,
+    flexWrap: "wrap",
+  },
+  groupMetaRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+    color: "#64748b",
+    flexWrap: "wrap",
+  },
+  chevron: {
+    color: "#94a3b8",
+    fontSize: 14,
+    paddingLeft: 8,
+    userSelect: "none",
+  },
+  subList: {
+    listStyle: "none",
+    padding: 0,
+    margin: 0,
+    borderTop: "1px solid #e2e8f0",
+    background: "#f8fafc",
+  },
+  subListItem: {
+    padding: "10px 16px 10px 24px",
+    cursor: "pointer",
+    borderBottom: "1px solid #eef2f7",
+  },
+  subListMain: {
+    fontSize: 13,
+    fontWeight: 500,
+    display: "flex",
+    alignItems: "center",
   },
   nonRecordedBox: {
     padding: 20,
