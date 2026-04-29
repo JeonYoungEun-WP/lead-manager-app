@@ -64,24 +64,37 @@ private fun CallRow(c: CallRecord, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
+            // 비-RECORDED (미응답·부재중·거절) 는 transcript 가 없으므로 안내 문구 표시.
+            val body = when {
+                c.callType == "MISSED" -> "수신 부재중 통화 (녹음 없음)"
+                c.callType == "REJECTED" -> "수신 거절 통화 (녹음 없음)"
+                c.callType == "NO_ANSWER" -> "발신 미응답 (상대 받지 않음)"
+                else -> c.summary?.take(120) ?: "요약 대기 중"
+            }
             Text(
-                c.summary?.take(120) ?: "요약 대기 중",
+                body,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 3,
             )
         }
-        StatusBadge(c.status)
+        StatusBadge(c)
     }
 }
 
 @Composable
-private fun StatusBadge(status: String) {
-    val (label, bg, fg) = when (status) {
-        "DONE" -> Triple("완료", Color(0xFFE6F4EA), Color(0xFF137333))
-        "PROCESSING" -> Triple("처리중", Color(0xFFE8F0FE), Color(0xFF1967D2))
-        "FAILED" -> Triple("실패", Color(0xFFFCE8E6), Color(0xFFC5221F))
-        "AWAITING_FILE" -> Triple("녹음대기", Color(0xFFF3E8FD), Color(0xFF6B2FD1))
-        else -> Triple("대기", Color(0xFFFFF4E5), Color(0xFFB06000))
+private fun StatusBadge(c: CallRecord) {
+    // 통화 유형이 비-RECORDED 면 status 무관하게 통화 유형으로 배지 노출.
+    val (label, bg, fg) = when (c.callType) {
+        "MISSED" -> Triple("부재중", Color(0xFFFEF3E2), Color(0xFF9A3412))
+        "REJECTED" -> Triple("거절", Color(0xFFFCE8E6), Color(0xFFC5221F))
+        "NO_ANSWER" -> Triple("미응답", Color(0xFFF1F5F9), Color(0xFF475569))
+        else -> when (c.status) {
+            "DONE" -> Triple("완료", Color(0xFFE6F4EA), Color(0xFF137333))
+            "PROCESSING" -> Triple("처리중", Color(0xFFE8F0FE), Color(0xFF1967D2))
+            "FAILED" -> Triple("실패", Color(0xFFFCE8E6), Color(0xFFC5221F))
+            "AWAITING_FILE" -> Triple("녹음대기", Color(0xFFF3E8FD), Color(0xFF6B2FD1))
+            else -> Triple("대기", Color(0xFFFFF4E5), Color(0xFFB06000))
+        }
     }
     Surface(color = bg, shape = MaterialTheme.shapes.small) {
         Text(

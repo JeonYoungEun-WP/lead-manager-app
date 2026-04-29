@@ -150,8 +150,14 @@ fun LeadDetailScreen(
                                             .format(Date(c.startedAt)),
                                         style = MaterialTheme.typography.bodyMedium,
                                     )
+                                    val callBody = when {
+                                        c.callType == "MISSED" -> "수신 부재중 (녹음 없음)"
+                                        c.callType == "REJECTED" -> "수신 거절 (녹음 없음)"
+                                        c.callType == "NO_ANSWER" -> "발신 미응답"
+                                        else -> c.summary?.take(80) ?: "요약 대기 중 (${c.status})"
+                                    }
                                     Text(
-                                        c.summary?.take(80) ?: "요약 대기 중 (${c.status})",
+                                        callBody,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 2,
