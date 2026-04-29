@@ -72,6 +72,22 @@ class LeadRepository(
     /** 죽은 워커가 남긴 PROCESSING 좀비 레코드를 PENDING 으로 복구. */
     suspend fun resetStaleProcessing(): Int = callRecordDao.resetProcessingToPending()
 
+    /** 재연락 정보 저장 (callbackAt 시각, tags). 알림 예약은 별도 호출. */
+    suspend fun setCallbackInfo(id: Long, callbackAtMs: Long?, tags: String?) =
+        callRecordDao.setCallbackInfo(id, callbackAtMs, tags)
+
+    /** 알림 예약 플래그 ON (스케줄 시 호출). */
+    suspend fun markCallbackScheduled(id: Long) =
+        callRecordDao.setNotifyScheduled(id, true)
+
+    /** 알림 발행 후 / 처리 완료 시 OFF — 같은 시각 중복 알림 방지 해제. */
+    suspend fun markCallbackFired(id: Long) =
+        callRecordDao.setNotifyScheduled(id, false)
+
+    /** 부팅 후 일괄 재예약용 — 미래 시각이고 아직 알림 등록 안 된 콜백들. */
+    suspend fun unscheduledFutureCallbacks(now: Long = System.currentTimeMillis()) =
+        callRecordDao.unscheduledFutureCallbacks(now)
+
     /** 앱에서 리드에게 발신 시 호출. 나중에 녹음 파일이 생기면 이 스텁에 붙는다. */
     suspend fun startOutgoingCall(leadId: Long, phone: String): Long {
         val stub = CallRecord(

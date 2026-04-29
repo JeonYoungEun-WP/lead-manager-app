@@ -28,6 +28,9 @@
     <!-- 부팅 후 WorkManager 재실행 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- 배터리 최적화 예외 다이얼로그 (Doze 모드 회피로 통화 즉시 감지 안정화) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- 저장소 직접 접근 안 함 — SAF(Storage Access Framework) 로 사용자가 선택한 폴더만 접근 -->
 
     <application
@@ -51,6 +54,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 재연락 약속 시각에 NotificationManager 로 알림 발행 -->
+        <receiver
+            android:name=".service.CallbackAlarmReceiver"
+            android:exported="false" />
     </application>
 
     <!-- 다른 앱 호출 대상 선언 (Android 11+ package visibility) -->

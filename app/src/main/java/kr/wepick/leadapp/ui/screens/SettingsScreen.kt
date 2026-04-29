@@ -1,8 +1,12 @@
 package kr.wepick.leadapp.ui.screens
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -156,6 +160,37 @@ fun SettingsScreen() {
                 }
             }
 
+            // 배터리 최적화 예외 — Doze 모드에서 백그라운드 처리가 지연되는 문제 회피
+            Card {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("배터리 최적화 예외", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Android 배터리 절약(Doze) 정책상 백그라운드 통화 감지가 늦어질 수 있습니다. " +
+                        "이 앱을 예외로 등록하면 통화 직후 거의 실시간으로 처리됩니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val ignored = remember { isIgnoringBatteryOptimizations(context) }
+                    var requested by remember { mutableStateOf(false) }
+                    if (ignored) {
+                        Text("✓ 예외 등록됨", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary)
+                    } else {
+                        Button(onClick = {
+                            requested = true
+                            requestIgnoreBatteryOptimizations(context)
+                        }) { Text("배터리 최적화 예외 허용 다이얼로그 열기") }
+                        if (requested) {
+                            Text(
+                                "다이얼로그에서 '허용' 선택 후 이 화면을 다시 열면 상태가 갱신됩니다.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+            }
+
             // 상담사 이름
             Card {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -209,6 +244,29 @@ fun SettingsScreen() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+private fun isIgnoringBatteryOptimizations(ctx: Context): Boolean {
+    val pm = ctx.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+    return pm.isIgnoringBatteryOptimizations(ctx.packageName)
+}
+
+private fun requestIgnoreBatteryOptimizations(ctx: Context) {
+    runCatching {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+            data = Uri.parse("package:${ctx.packageName}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        ctx.startActivity(intent)
+    }.onFailure {
+        // 일부 OEM 은 인텐트 비지원 → 일반 배터리 설정으로 폴백
+        runCatching {
+            val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ctx.startActivity(fallback)
         }
     }
 }

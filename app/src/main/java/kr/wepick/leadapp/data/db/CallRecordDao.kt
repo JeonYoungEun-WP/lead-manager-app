@@ -58,4 +58,22 @@ interface CallRecordDao {
 
     @Query("UPDATE call_records SET fileUri = :fileUri, status = 'PENDING' WHERE id = :id")
     suspend fun attachFile(id: Long, fileUri: String)
+
+    /** 재연락 약속 시각 + 태그 업데이트 (Phase 1). */
+    @Query("UPDATE call_records SET callbackAt = :callbackAt, tags = :tags WHERE id = :id")
+    suspend fun setCallbackInfo(id: Long, callbackAt: Long?, tags: String?)
+
+    /** 로컬 알림 예약 플래그 갱신 (중복 알림 방지용). */
+    @Query("UPDATE call_records SET notifyScheduled = :scheduled WHERE id = :id")
+    suspend fun setNotifyScheduled(id: Long, scheduled: Boolean)
+
+    /**
+     * 미래 시점 callbackAt 이 있고 아직 알림 예약 안 된 레코드 — 부팅 직후 / 마이그레이션 직후
+     * 일괄 재스케줄링용.
+     */
+    @Query(
+        "SELECT * FROM call_records WHERE callbackAt IS NOT NULL " +
+        "AND callbackAt > :now AND notifyScheduled = 0"
+    )
+    suspend fun unscheduledFutureCallbacks(now: Long): List<CallRecord>
 }

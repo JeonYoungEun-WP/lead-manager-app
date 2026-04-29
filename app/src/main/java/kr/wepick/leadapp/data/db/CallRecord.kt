@@ -67,4 +67,13 @@ data class CallRecord(
      * 비-RECORDED 는 transcript/summary 가 없고 status=NO_TRANSCRIPT 로 박힌다.
      */
     val callType: String = "RECORDED",
+
+    /** 재연락 약속 시각 (epoch ms, KST). 통화 요약에서 추출되거나 사용자가 직접 설정. null 이면 미설정. */
+    val callbackAt: Long? = null,
+
+    /** 콤마 구분 태그 (예: "재연락,긴급"). null 또는 빈문자열이면 태그 없음. */
+    val tags: String? = null,
+
+    /** 로컬 알림 예약 여부 — 같은 callbackAt 으로 중복 알림 방지용. */
+    val notifyScheduled: Boolean = false,
 )

@@ -11,6 +11,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
@@ -27,10 +28,17 @@ import kr.wepick.leadapp.ui.screens.LeadListScreen
 import kr.wepick.leadapp.ui.screens.SettingsScreen
 
 @Composable
-fun AppRoot() {
+fun AppRoot(initialCallId: Long? = null) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+
+    // 알림 클릭 등으로 들어온 경우 해당 통화 상세로 자동 이동.
+    LaunchedEffect(initialCallId) {
+        if (initialCallId != null && initialCallId > 0L) {
+            navController.navigate(Route.CallDetail.build(initialCallId))
+        }
+    }
 
     Scaffold(
         bottomBar = {

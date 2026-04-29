@@ -84,6 +84,21 @@ class SttWorker(
 
                 repo.setCallResult(call.id, transcript, summary)
 
+                // 재연락 마커 추출 → DB 저장 + 폰 로컬 알림 예약 (Phase 1+2)
+                val callback = kr.wepick.leadapp.util.CallbackParser.extract(summary)
+                if (callback?.callbackAtMs != null) {
+                    repo.setCallbackInfo(call.id, callback.callbackAtMs, "재연락")
+                    val leadNameForAlarm = call.leadId?.let { repo.getLead(it)?.name }.orEmpty()
+                    CallbackNotifier.scheduleFor(
+                        applicationContext,
+                        call.id,
+                        callback.callbackAtMs,
+                        leadNameForAlarm,
+                        call.phone,
+                    )
+                    repo.markCallbackScheduled(call.id)
+                }
+
                 // 어드민 업로드 (실패해도 로컬 저장은 유지, 실패 사유는 uploadError 에 기록)
                 val durationSec = call.durationSec
                     ?: extractDurationSec(applicationContext, Uri.parse(call.fileUri))
@@ -93,6 +108,7 @@ class SttWorker(
                         uploadTranscript(
                             http, backendUrl, agentName, leadName, call.phone,
                             call.startedAt, transcript, summary, call.id, durationSec,
+                            callback?.callbackAtMs,
                         )
                     }
                 }
@@ -122,6 +138,7 @@ class SttWorker(
         summary: String,
         clientCallId: Long,
         durationSec: Int?,
+        callbackAtMs: Long?,
     ) {
         val body = JSONObject()
             .put("agentName", agentName.ifBlank { "unknown" })
@@ -132,7 +149,10 @@ class SttWorker(
             .put("summary", summary)
             .put("clientCallId", clientCallId)
             .put("callType", "RECORDED")
-            .apply { if (durationSec != null && durationSec > 0) put("durationSec", durationSec) }
+            .apply {
+                if (durationSec != null && durationSec > 0) put("durationSec", durationSec)
+                if (callbackAtMs != null) put("callbackAt", callbackAtMs)
+            }
             .toString()
         val req = Request.Builder()
             .url("$backendUrl/api/transcripts")

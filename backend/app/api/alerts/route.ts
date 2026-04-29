@@ -131,6 +131,7 @@ export async function GET(_req: NextRequest) {
         let leadName = meta.leadName;
         let leadPhone = meta.leadPhone;
         let agentName = meta.agentName;
+        let structuredCallbackAt: number | null = null;
         try {
           const r = await fetch(b.url, { cache: "no-store" });
           if (!r.ok) return null;
@@ -139,8 +140,10 @@ export async function GET(_req: NextRequest) {
             leadName?: string;
             leadPhone?: string;
             agentName?: string;
+            callbackAt?: number;
           };
           summary = String(json.summary ?? "");
+          if (typeof json.callbackAt === "number") structuredCallbackAt = json.callbackAt;
           // 구 포맷 blob 은 path 에 메타가 없음 — record JSON 의 값을 우선 사용
           if (!leadName && json.leadName) leadName = String(json.leadName);
           if (!leadPhone && json.leadPhone) leadPhone = String(json.leadPhone);
@@ -148,9 +151,24 @@ export async function GET(_req: NextRequest) {
         } catch {
           return null;
         }
-        const callback = extractCallback(summary);
-        if (!callback) return null;
-        const state: AlertState = classifyAlert(callback.callbackAtMs, now);
+        // Phase 1: 구조화 callbackAt 우선. 없으면 텍스트 마커 파싱 fallback.
+        let callbackAtMs: number | null;
+        let callbackAtIso: string | null;
+        let note: string;
+        if (structuredCallbackAt != null) {
+          callbackAtMs = structuredCallbackAt;
+          // ISO (KST) 로 역변환 — 어드민 표시용
+          const d = new Date(structuredCallbackAt + 9 * 60 * 60 * 1000);
+          callbackAtIso = d.toISOString().slice(0, 16);
+          note = "재연락";
+        } else {
+          const callback = extractCallback(summary);
+          if (!callback) return null;
+          callbackAtMs = callback.callbackAtMs;
+          callbackAtIso = callback.callbackAtIso;
+          note = callback.note;
+        }
+        const state: AlertState = classifyAlert(callbackAtMs, now);
         return {
           type: "callback" as const,
           id: meta.id,
@@ -159,9 +177,9 @@ export async function GET(_req: NextRequest) {
           agentName,
           leadName,
           leadPhone,
-          callbackAtIso: callback.callbackAtIso,
-          callbackAtMs: callback.callbackAtMs,
-          note: callback.note,
+          callbackAtIso,
+          callbackAtMs,
+          note,
           state,
         };
       },

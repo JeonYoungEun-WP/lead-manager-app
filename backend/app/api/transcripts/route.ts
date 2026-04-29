@@ -58,6 +58,10 @@ type TranscriptPayload = {
   durationSec?: number;
   /** 통화 유형 — 미지정시 RECORDED 로 간주 (구버전 클라이언트 호환). */
   callType?: CallType;
+  /** 재연락 약속 시각 (epoch ms). Phase 1 — 텍스트 마커 파싱 대신 구조화 필드. */
+  callbackAt?: number;
+  /** 콤마 구분 태그 (예: "재연락,긴급"). */
+  tags?: string;
 };
 
 /**

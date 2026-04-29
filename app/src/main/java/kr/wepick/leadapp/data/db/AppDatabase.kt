@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Lead::class, CallRecord::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -38,6 +38,22 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE call_records ADD COLUMN callType TEXT NOT NULL DEFAULT 'RECORDED'"
+                )
+            }
+        }
+
+        /**
+         * v3 → v4: call_records 에 재연락 알림 관련 컬럼 추가.
+         * - callbackAt: 재연락 약속 시각 (ms, nullable)
+         * - tags: 콤마 구분 태그 (nullable)
+         * - notifyScheduled: 로컬 알림 예약 플래그 (중복 방지용)
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE call_records ADD COLUMN callbackAt INTEGER")
+                db.execSQL("ALTER TABLE call_records ADD COLUMN tags TEXT")
+                db.execSQL(
+                    "ALTER TABLE call_records ADD COLUMN notifyScheduled INTEGER NOT NULL DEFAULT 0"
                 )
             }
         }
