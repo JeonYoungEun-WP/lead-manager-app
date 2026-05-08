@@ -4,7 +4,7 @@
 >
 > 이 문서는 현재 구현 기준의 **엔드투엔드 프로세스 명세**다. 스택·구조는 [CLAUDE.md](CLAUDE.md) 참조.
 >
-> 최종 업데이트: 2026-05-08 (audio 업로드/다운로드 인프라 추가)
+> 최종 업데이트: 2026-05-08 (앱 [녹취 업로드] 버튼 — audio 업로드 파이프라인 완성)
 
 ---
 
@@ -116,16 +116,21 @@
 - **알림 탭**: 재연락 도래(과거/임박)/예정/시각 미정 통화 분류 표시.
 - 자동 갱신 20초 (탭 숨김 시 정지, 복귀 시 즉시 1회 갱신).
 
-### 2.7.1 녹음 audio 업로드/다운로드 (옵션)
-- **앱 → 백엔드 직접 업로드** (4.5MB body limit 우회):
-  1. 앱 → `POST /api/audio/upload-token` (X-App-Token + pathname) → Vercel Blob client token 발급
-  2. 앱 → Vercel Blob 에 PUT (지정 path)
+### 2.7.1 녹음 audio 업로드/다운로드 (수동)
+- **트리거**: 앱 통화 상세에서 사용자가 [녹취 업로드] 버튼을 눌렀을 때만 발화. 자동 업로드 안 함 (비용/보안 — 모든 통화의 원음을 자동으로 올리지 않음).
+- **앱 → 백엔드 직접 업로드** (`AudioUploadWorker`, 4.5MB body limit 우회):
+  1. 앱 → `POST /api/audio/upload-token` (X-App-Token + HandleUploadBody) → Vercel Blob client token 발급
+  2. 앱 → `https://vercel.com/api/blob/?pathname=...` 에 직접 PUT (Bearer 클라이언트 토큰)
+  3. `@vercel/blob` v2 클라이언트 SDK 의 raw HTTP 프로토콜을 그대로 흉내 — 헤더: `x-api-version: 12`, `x-vercel-blob-access: public`, `x-content-type`, `x-api-blob-request-id`, `x-api-blob-request-attempt`.
 - **Path 규약**: `audios/YYYY-MM/{startedAt}_{clientCallId}.{m4a|amr|3gp|mp4|mp3|wav|flac}` (deterministic)
-  - 같은 (startedAt, clientCallId) 재업로드 시 덮어쓰기 (멱등).
+  - 같은 (startedAt, clientCallId) 재업로드 시 덮어쓰기 (멱등 — 서버 토큰에 `addRandomSuffix=false`, `allowOverwrite=true` 박힘).
   - transcript record 와는 `startedAt` 매칭으로 어드민이 동적으로 연결.
-- **어드민 노출**: `GET /api/transcripts` / `[id]` 가 list("audios/") 결과를 startedAt 으로 매핑해서 `audioUrl` 필드로 응답.
+- **앱 상태 머신** (CallRecord.audioUploadStatus, transcript 업로드와 독립):
+  - NONE → UPLOADING → OK / FAILED. FAILED 에서 [재시도] 버튼으로 재발화.
+  - 워커 좀비 패턴 미적용 — 단발성 사용자 트리거라 PROCESSING 좀비 시나리오 없음.
+- **어드민 노출**: `GET /api/transcripts` / `[id]` 가 list("audios/") 결과를 startedAt 으로 매핑해서 `audioUrl` 필드로 응답. 어드민 list/detail 에 🎧 녹음 다운로드 버튼.
 - **파일 크기**: 100MB 상한 (통화 m4a 평균 ~1MB/분).
-- **용도**: 어드민이 원본 음성 청취·검증·증빙용 다운로드. STT 파이프라인과는 독립 (앱이 별도 명시적으로 업로드해야 노출됨).
+- **용도**: 어드민이 원본 음성 청취·검증·증빙용 다운로드. STT 파이프라인과는 독립.
 
 ### 2.8 재연락 알림 — `CallbackNotifier` (Phase 1+2)
 - **Phase 1 (구조화)**: SttWorker 가 summary 의 `[#재연락 ...]` 마커 → DB 의 `callbackAt: Long?` + `tags` 컬럼에 저장 + 페이로드 포함. 어드민 alerts 가 record JSON 의 callbackAt 우선 사용.
@@ -297,3 +302,4 @@ NO_TRANSCRIPT  (callType=NO_ANSWER)  PROCESSING ◄── 좀비복구 ──┐
 | 2026-04-30 | 어드민 list 통화 길이 표시 (v4 path), callType UI 분기 (배지·안내문), 발신 60초 검증 워커, **TelephonyCallback 통화 종료 즉시 감지**, **어드민 리드별 그룹핑**. |
 | 2026-05-08 | PRD 정합 검증 — 04-30 이후 코드 변경 없음 확인. 알림 권한(`POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM`) 제약 명시 + 폴백 동작 실패모드 표 추가. |
 | 2026-05-08 | **녹음 audio 업로드/다운로드 인프라** — `POST /api/audio/upload-token` (X-App-Token + path 강제) + transcripts GET 응답에 `audioUrl` 매핑 + 어드민 list/detail 에 "🎧 녹음 다운로드" 버튼. 앱 측 업로드 버튼/로직은 ANDROID_TODO §7. |
+| 2026-05-08 | **앱 [녹취 업로드] 버튼 — audio 업로드 파이프라인 완성**. `AudioUploadWorker` 가 `@vercel/blob` v2 클라이언트 SDK 의 raw HTTP 프로토콜로 직접 PUT (Vercel function 4.5MB body limit 우회). Room v4→v5 마이그레이션 (`audioUploadStatus`, `audioUploadError`). `CallDetailScreen` 에 RECORDED 통화 한정 상태 카드 + 클릭 후 폴링. 비-RECORDED 는 녹음 자체가 없어 카드 미표시. |
