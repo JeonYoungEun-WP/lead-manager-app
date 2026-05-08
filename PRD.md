@@ -4,7 +4,7 @@
 >
 > 이 문서는 현재 구현 기준의 **엔드투엔드 프로세스 명세**다. 스택·구조는 [CLAUDE.md](CLAUDE.md) 참조.
 >
-> 최종 업데이트: 2026-04-30
+> 최종 업데이트: 2026-05-08 (코드 정합 검증)
 
 ---
 
@@ -173,6 +173,7 @@ NO_TRANSCRIPT  (callType=NO_ANSWER)  PROCESSING ◄── 좀비복구 ──┐
 - 사용자가 전화 앱에서 자동 녹음을 켜야 함.
 - SAF 권한으로 `/Recordings/Call/` 폴더를 명시적으로 허용해야 함.
 - `READ_PHONE_STATE`, `READ_CALL_LOG` 권한 필요 (즉시 감지 + CallLog 스캔).
+- `POST_NOTIFICATIONS` (Android 13+ 런타임), `SCHEDULE_EXACT_ALARM` (Android 12+ 매니페스트) — 재연락 알림.
 - **배터리 최적화 예외 권장** — 설정 화면에서 토글 (Doze 모드에서 워커 지연 회피).
 - `minSdk 33` (Android 13+).
 - Room: 명시적 Migration v1→v4 (uploadStatus, callType, callbackAt). `fallbackToDestructiveMigration(true)` 는 미정의 다운그레이드 안전망.
@@ -203,6 +204,8 @@ NO_TRANSCRIPT  (callType=NO_ANSWER)  PROCESSING ◄── 좀비복구 ──┐
 | 앱↔서버 토큰 불일치 | 서버 401 응답 | `uploadError` 에 HTTP 401 |
 | Doze 모드로 처리 지연 | (지표 없음) | 사용자가 배터리 최적화 예외 등록 시 회피 |
 | TelephonyCallback 등록 실패 | logcat | 60초 보험 워커가 처리 |
+| 알림 권한 거부 (`POST_NOTIFICATIONS`) | (지표 없음) | 알림 미표시 — 어드민 알림 탭으로 폴백 (notifyScheduled 플래그는 갱신됨) |
+| `SCHEDULE_EXACT_ALARM` 미허용 | logcat (`SecurityException` catch) | 부정확 알림으로 폴백 (`AlarmManager.set`) — 시각 정확도 ±수 분 |
 
 ---
 
@@ -280,3 +283,4 @@ NO_TRANSCRIPT  (callType=NO_ANSWER)  PROCESSING ◄── 좀비복구 ──┐
 | 2026-04-28 | 재연락 감지 Phase 0 + 어드민 알림 탭 + blob 메타 인코딩 (다른 컴 작업) |
 | 2026-04-29 | **§1~§5 일괄 완료**: Migration v1→v4 데이터 보존, idempotency, durationSec, 자동/수동 재시도, callType (RECORDED/NO_ANSWER/MISSED/REJECTED), FileObserver, 배터리 예외, 재연락 Phase 1+2. §6 RTZR 삭제는 API 미지원으로 N/A. |
 | 2026-04-30 | 어드민 list 통화 길이 표시 (v4 path), callType UI 분기 (배지·안내문), 발신 60초 검증 워커, **TelephonyCallback 통화 종료 즉시 감지**, **어드민 리드별 그룹핑**. |
+| 2026-05-08 | PRD 정합 검증 — 04-30 이후 코드 변경 없음 확인. 알림 권한(`POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM`) 제약 명시 + 폴백 동작 실패모드 표 추가. |
