@@ -4,7 +4,7 @@
 >
 > 이 문서는 현재 구현 기준의 **엔드투엔드 프로세스 명세**다. 스택·구조는 [CLAUDE.md](CLAUDE.md) 참조.
 >
-> 최종 업데이트: 2026-05-08 (코드 정합 검증)
+> 최종 업데이트: 2026-05-08 (audio 업로드/다운로드 인프라 추가)
 
 ---
 
@@ -93,9 +93,10 @@
 | `POST /api/rtzr/token` | RTZR 액세스 토큰 발급 프록시 (X-App-Token 필요) |
 | `POST /api/rtzr/summarize` | transcript → 5줄 요약 + 핵심 포인트 + callback 추출 (Gemini 2.5 Flash, SSE) |
 | `POST /api/transcripts` | 어드민 업로드 (X-App-Token 필요, idempotency 검증) |
-| `GET /api/transcripts` | 어드민 목록 (인증 없음 — URL 자체가 보안 layer) |
-| `GET /api/transcripts/[id]` | 어드민 단건 조회 (인증 없음) |
+| `GET /api/transcripts` | 어드민 목록 (인증 없음 — URL 자체가 보안 layer, audioUrl 매핑 포함) |
+| `GET /api/transcripts/[id]` | 어드민 단건 조회 (인증 없음, audioUrl 포함) |
 | `GET /api/alerts` | 재연락 도래 통화 (인증 없음) |
+| `POST /api/audio/upload-token` | 앱 audio 업로드용 client token 발급 (X-App-Token 필요, path 강제) |
 
 ### 2.6 어드민 업로드 — `UploadRetryWorker`
 - **재시도 정책** (자동): 즉시(SttWorker) → 1분 → 5분 → 30분 → 24시간 → 영구 FAILED.
@@ -109,11 +110,22 @@
 - **인증 없음** — URL 자체가 보안 layer (POST 만 X-App-Token 유지).
 - **리드별 그룹 카드** (collapsible):
   - 헤더: 이름·번호·총 통화수·통화 유형 분포(녹음/미응답/부재중/거절)·최근 시각.
-  - 펼치면 시간순 통화 목록 (시각·유형 배지·상담사·길이).
+  - 펼치면 시간순 통화 목록 (시각·유형 배지·상담사·길이·🎧녹음).
 - **상단 필터**: 상담사 / 통화 유형 / 자동 갱신 토글 / 모두 펼치기·접기.
-- **상세 패널**: 요약·전사문·통화 길이·다운로드(.txt). 비-RECORDED 는 안내 박스.
+- **상세 패널**: 요약·전사문·통화 길이·다운로드(.txt) + **녹음 다운로드**. 비-RECORDED 는 안내 박스.
 - **알림 탭**: 재연락 도래(과거/임박)/예정/시각 미정 통화 분류 표시.
 - 자동 갱신 20초 (탭 숨김 시 정지, 복귀 시 즉시 1회 갱신).
+
+### 2.7.1 녹음 audio 업로드/다운로드 (옵션)
+- **앱 → 백엔드 직접 업로드** (4.5MB body limit 우회):
+  1. 앱 → `POST /api/audio/upload-token` (X-App-Token + pathname) → Vercel Blob client token 발급
+  2. 앱 → Vercel Blob 에 PUT (지정 path)
+- **Path 규약**: `audios/YYYY-MM/{startedAt}_{clientCallId}.{m4a|amr|3gp|mp4|mp3|wav|flac}` (deterministic)
+  - 같은 (startedAt, clientCallId) 재업로드 시 덮어쓰기 (멱등).
+  - transcript record 와는 `startedAt` 매칭으로 어드민이 동적으로 연결.
+- **어드민 노출**: `GET /api/transcripts` / `[id]` 가 list("audios/") 결과를 startedAt 으로 매핑해서 `audioUrl` 필드로 응답.
+- **파일 크기**: 100MB 상한 (통화 m4a 평균 ~1MB/분).
+- **용도**: 어드민이 원본 음성 청취·검증·증빙용 다운로드. STT 파이프라인과는 독립 (앱이 별도 명시적으로 업로드해야 노출됨).
 
 ### 2.8 재연락 알림 — `CallbackNotifier` (Phase 1+2)
 - **Phase 1 (구조화)**: SttWorker 가 summary 의 `[#재연락 ...]` 마커 → DB 의 `callbackAt: Long?` + `tags` 컬럼에 저장 + 페이로드 포함. 어드민 alerts 가 record JSON 의 callbackAt 우선 사용.
@@ -284,3 +296,4 @@ NO_TRANSCRIPT  (callType=NO_ANSWER)  PROCESSING ◄── 좀비복구 ──┐
 | 2026-04-29 | **§1~§5 일괄 완료**: Migration v1→v4 데이터 보존, idempotency, durationSec, 자동/수동 재시도, callType (RECORDED/NO_ANSWER/MISSED/REJECTED), FileObserver, 배터리 예외, 재연락 Phase 1+2. §6 RTZR 삭제는 API 미지원으로 N/A. |
 | 2026-04-30 | 어드민 list 통화 길이 표시 (v4 path), callType UI 분기 (배지·안내문), 발신 60초 검증 워커, **TelephonyCallback 통화 종료 즉시 감지**, **어드민 리드별 그룹핑**. |
 | 2026-05-08 | PRD 정합 검증 — 04-30 이후 코드 변경 없음 확인. 알림 권한(`POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM`) 제약 명시 + 폴백 동작 실패모드 표 추가. |
+| 2026-05-08 | **녹음 audio 업로드/다운로드 인프라** — `POST /api/audio/upload-token` (X-App-Token + path 강제) + transcripts GET 응답에 `audioUrl` 매핑 + 어드민 list/detail 에 "🎧 녹음 다운로드" 버튼. 앱 측 업로드 버튼/로직은 ANDROID_TODO §7. |

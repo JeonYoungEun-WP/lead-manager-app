@@ -154,6 +154,47 @@ Phase 0(백엔드 Gemini 프롬프트로 요약 첫 줄에 `[#재연락 ...]` �
 
 ---
 
+## 🟤 7. 녹음 audio 어드민 업로드 (앱 측 작업)
+
+백엔드 인프라(`POST /api/audio/upload-token` + 어드민 다운로드 UI)는 이미 배포됨 (2026-05-08).
+앱 측에서 사용자가 통화 항목별로 audio 를 업로드할 수 있도록 UI/로직 추가.
+
+### 7.1 통화 리스트 / 상세에 [녹음 업로드] 버튼
+- [ ] `CallLogScreen` 또는 통화 리스트의 각 row 에 "녹음 업로드" 버튼 (RECORDED + fileUri 가 SAF content URI 인 항목만)
+- [ ] 또는 `CallDetailScreen` 에 단일 버튼 — 리스트 화면 부담 줄이고 싶으면 이쪽 우선
+- [ ] 업로드 진행/완료/실패 상태 표시 (Snackbar 또는 진행률 bar)
+
+### 7.2 업로드 호출 흐름
+- [ ] 새 클래스 `AudioUploader` (`service/`):
+  1. `getBackendBaseUrl()` 에서 base URL 획득
+  2. SAF content URI → InputStream 으로 audio 바이트 확보
+  3. `POST {base}/api/audio/upload-token` 호출 (X-App-Token 헤더)
+     - body: `{ "type": "blob.generate-client-token", "payload": { "pathname": "audios/YYYY-MM/{startedAt}_{clientCallId}.m4a", "callbackUrl": "<base>/api/audio/upload-token", "clientPayload": null, "multipart": false } }`
+     - 응답: `{ type: "blob.generate-client-token", clientToken, ... }`
+  4. 받은 토큰으로 Vercel Blob 에 직접 PUT
+     - URL: `https://{store}.public.blob.vercel-storage.com/{pathname}` (응답에 포함됨)
+     - 또는 Vercel Blob client SDK 의 Android 등가물이 없으니 raw HTTP 로 직접 PUT
+- [ ] 대안: 단순화하려면 `@vercel/blob` SDK 가 정의하는 client protocol 을 그대로 따라 raw HTTP 로 구현 (handleUpload 가 양쪽 단계 응답 파싱하므로)
+- [ ] 백엔드 라우트가 강제하는 path 패턴: `audios/YYYY-MM/{startedAt}_{clientCallId}.{m4a|amr|3gp|mp4|mp3|wav|flac}`
+  - 강제 정규식: `/^audios\/\d{4}-\d{2}\/\d+_\d+\.(m4a|amr|3gp|mp4|mp3|wav|flac)$/i`
+  - 어긋나면 400 에러
+
+### 7.3 DB 트래킹
+- [ ] `CallRecord` 에 `audioUploaded: Boolean = false`, `audioUploadedAt: Long?` 추가 (Room v5 migration)
+- [ ] `LeadRepository.markAudioUploaded(id, uploadedAt)` 추가
+- [ ] 업로드 성공 시 호출, 실패 시 사용자에게 표시 후 재시도 가능하게
+
+### 7.4 멱등성 / 재시도
+- [ ] 같은 (startedAt, clientCallId) 로 다시 업로드하면 백엔드가 덮어쓰기 (서버 측 `addRandomSuffix: false`, `allowOverwrite: true`)
+- [ ] 네트워크 실패 시 `UploadRetryWorker` 와 비슷한 백오프로 자동 재시도 검토 (선택)
+
+### 7.5 UX 고려
+- [ ] 업로드 전 사용자 확인 다이얼로그 (대용량 파일이라 모바일 데이터 사용 경고)
+- [ ] WiFi 한정 옵션 (DataStore 토글)
+- [ ] 통화 길이 표시 + 추정 파일 크기 (기준: m4a ~1MB/분)
+
+---
+
 ## 참고 사항
 
 ### 빌드 시 주의

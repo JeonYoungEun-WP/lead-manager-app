@@ -30,8 +30,32 @@ export async function GET(
         { status: 502 },
       );
     }
-    const json = await res.json();
-    return NextResponse.json(json);
+    const json = (await res.json()) as { startedAt?: number };
+
+    // audio 매칭 — audios/YYYY-MM/{startedAt}_*.{ext}
+    let audioUrl: string | null = null;
+    if (typeof json.startedAt === "number") {
+      const date = new Date(json.startedAt);
+      const ym = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      try {
+        const audio = await list({
+          prefix: `audios/${ym}/${json.startedAt}_`,
+          limit: 5,
+        });
+        if (audio.blobs.length > 0) {
+          // 동일 startedAt 에 여러 audio 가 있으면 가장 최근 업로드 우선
+          const latest = [...audio.blobs].sort(
+            (a, b) =>
+              new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
+          )[0];
+          audioUrl = latest.url;
+        }
+      } catch {
+        // audio 조회 실패해도 transcript 자체는 반환
+      }
+    }
+
+    return NextResponse.json({ ...json, audioUrl });
   } catch (e) {
     return NextResponse.json(
       { error: `조회 실패: ${(e as Error).message}` },

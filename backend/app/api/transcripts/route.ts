@@ -178,11 +178,41 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/**
+ * audios/ blob 들을 한 번 list 해서 startedAt → audio URL 매핑 만든다.
+ * Path 포맷: audios/YYYY-MM/{startedAt}_{clientCallId}.{ext}
+ *   - 키: startedAt (ms 단위라 동시각 충돌 거의 없음)
+ *   - 동일 startedAt 에 audio 가 2개면 가장 최근(uploadedAt) 우선
+ */
+async function buildAudioUrlMap(): Promise<Map<number, string>> {
+  const map = new Map<number, string>();
+  try {
+    const { blobs } = await list({ prefix: "audios/", limit: 500 });
+    // 최신 업로드 우선 — 같은 startedAt 충돌 시 마지막에 set 한 것 유지하도록 오래된 것부터 처리
+    const sorted = [...blobs].sort(
+      (a, b) => new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime(),
+    );
+    for (const b of sorted) {
+      const m = b.pathname.match(/audios\/[^/]+\/(\d+)_\d+\.[a-z0-9]+$/i);
+      if (!m) continue;
+      const startedAt = Number(m[1]);
+      if (!Number.isFinite(startedAt)) continue;
+      map.set(startedAt, b.url);
+    }
+  } catch {
+    // audio list 실패해도 transcripts 리스트 자체는 반환되도록 swallow
+  }
+  return map;
+}
+
 export async function GET(_req: NextRequest) {
   // 어드민 조회는 토큰 없이 접근 가능. (POST 업로드는 X-App-Token 유지)
   // 보안 layer 가 필요하면 Vercel Authentication / IP 화이트리스트로 분리 권장.
   try {
-    const { blobs } = await list({ prefix: "transcripts/", limit: 500 });
+    const [{ blobs }, audioUrlMap] = await Promise.all([
+      list({ prefix: "transcripts/", limit: 500 }),
+      buildAudioUrlMap(),
+    ]);
     const items = blobs
       .map((b) => {
         // v4 (현행): {startedAt}_{agent}_{phone}_{name}_{callType}_{durationSec}_{uuid}.json
@@ -265,6 +295,7 @@ export async function GET(_req: NextRequest) {
         return null;
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
+      .map((it) => ({ ...it, audioUrl: audioUrlMap.get(it.startedAt) ?? null }))
       .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
     return NextResponse.json({ items });
   } catch (e) {

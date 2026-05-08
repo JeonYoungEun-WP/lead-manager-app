@@ -16,6 +16,8 @@ type TranscriptItem = {
   callType?: CallType;
   /** 통화 길이 (초). v4 path 부터 list 응답에 포함. v3 이하는 null. */
   durationSec?: number | null;
+  /** 녹음 audio URL — 앱이 별도 업로드했을 때만 채워짐. 없으면 null. */
+  audioUrl?: string | null;
   size: number;
   uploadedAt: string;
 };
@@ -33,6 +35,8 @@ type TranscriptDetail = {
   /** 통화 길이 (초). 신버전 앱부터 채워서 업로드. 없을 수 있음. */
   durationSec?: number;
   callType?: CallType;
+  /** 녹음 audio URL — 앱이 업로드했을 때만 채워짐. */
+  audioUrl?: string | null;
 };
 
 const CALL_TYPE_LABEL: Record<CallType, string> = {
@@ -437,6 +441,17 @@ export default function AdminPage() {
                                       {CALL_TYPE_LABEL[ct]}
                                     </span>
                                   )}
+                                  {it.audioUrl && (
+                                    <a
+                                      href={it.audioUrl}
+                                      download
+                                      onClick={(e) => e.stopPropagation()}
+                                      style={styles.audioDownloadLink}
+                                      title="녹음 파일 다운로드"
+                                    >
+                                      🎧 녹음
+                                    </a>
+                                  )}
                                 </div>
                                 <div style={styles.listItemMeta}>
                                   상담사 {agent}
@@ -595,9 +610,21 @@ function Detail({ d, onDownload }: { d: TranscriptDetail; onDownload: () => void
             )}
           </div>
         </div>
-        {isRecorded && (
-          <button onClick={onDownload} style={styles.btn}>전문+요약 다운로드</button>
-        )}
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          {d.audioUrl && (
+            <a
+              href={d.audioUrl}
+              download
+              style={styles.btnSecondary}
+              title="원본 녹음 파일을 다운로드합니다"
+            >
+              🎧 녹음 다운로드
+            </a>
+          )}
+          {isRecorded && (
+            <button onClick={onDownload} style={styles.btn}>전문+요약 다운로드</button>
+          )}
+        </div>
       </div>
 
       {!isRecorded ? (
@@ -688,6 +715,18 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     fontSize: 11,
     fontWeight: 600,
+    whiteSpace: "nowrap",
+  },
+  audioDownloadLink: {
+    marginLeft: 8,
+    padding: "1px 8px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 500,
+    background: "#ecfeff",
+    color: "#0e7490",
+    textDecoration: "none",
+    border: "1px solid #67e8f9",
     whiteSpace: "nowrap",
   },
   listHeaderRow: {
