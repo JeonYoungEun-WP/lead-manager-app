@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Lead::class, CallRecord::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -54,6 +54,22 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE call_records ADD COLUMN tags TEXT")
                 db.execSQL(
                     "ALTER TABLE call_records ADD COLUMN notifyScheduled INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        /**
+         * v4 → v5: 녹음 audio 파일 업로드 상태 컬럼 추가.
+         * - audioUploadStatus: NONE / UPLOADING / OK / FAILED (기본 NONE)
+         * - audioUploadError: 실패 사유
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE call_records ADD COLUMN audioUploadStatus TEXT NOT NULL DEFAULT 'NONE'"
+                )
+                db.execSQL(
+                    "ALTER TABLE call_records ADD COLUMN audioUploadError TEXT"
                 )
             }
         }

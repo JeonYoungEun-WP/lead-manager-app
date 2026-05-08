@@ -76,4 +76,14 @@ data class CallRecord(
 
     /** 로컬 알림 예약 여부 — 같은 callbackAt 으로 중복 알림 방지용. */
     val notifyScheduled: Boolean = false,
+
+    /**
+     * 녹음 audio 파일 업로드 상태 — NONE / UPLOADING / OK / FAILED.
+     * 사용자가 "녹취 업로드" 버튼을 눌러서 명시적으로 올렸을 때만 OK 가 된다.
+     * 어드민 transcript 업로드 (uploadStatus) 와 독립.
+     */
+    val audioUploadStatus: String = "NONE",
+
+    /** 오디오 업로드 실패 사유 (audioUploadStatus=FAILED). */
+    val audioUploadError: String? = null,
 )

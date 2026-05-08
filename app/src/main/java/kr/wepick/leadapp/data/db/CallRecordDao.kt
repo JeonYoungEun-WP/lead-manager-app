@@ -50,6 +50,11 @@ interface CallRecordDao {
     suspend fun updateUploadState(id: Long, status: String, err: String? = null)
 
     @Query(
+        "UPDATE call_records SET audioUploadStatus = :status, audioUploadError = :err WHERE id = :id"
+    )
+    suspend fun updateAudioUploadState(id: Long, status: String, err: String? = null)
+
+    @Query(
         "SELECT * FROM call_records WHERE status = 'AWAITING_FILE' " +
         "AND startedAt BETWEEN :lo AND :hi " +
         "ORDER BY ABS(startedAt - :ts) ASC LIMIT 1"
