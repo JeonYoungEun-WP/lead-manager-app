@@ -83,9 +83,9 @@ fun CallDetailScreen(
                     Card {
                         Column(Modifier.padding(16.dp)) {
                             val msg = when (c.callType) {
-                                "MISSED" -> "수신 부재중 통화입니다."
+                                "MISSED" -> "고객의 전화를 받지 못했습니다 (놓친 전화)."
                                 "REJECTED" -> "수신 거절 통화입니다."
-                                "NO_ANSWER" -> "발신했으나 상대가 받지 않았습니다."
+                                "NO_ANSWER" -> "고객이 전화를 받지 않았습니다 (부재중)."
                                 else -> "녹음이 없는 통화입니다."
                             }
                             Text(msg, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
@@ -138,9 +138,9 @@ fun CallDetailScreen(
 @Composable
 private fun CallTypeBadge(callType: String) {
     val (label, bg, fg) = when (callType) {
-        "MISSED" -> Triple("부재중", Color(0xFFFEF3E2), Color(0xFF9A3412))
+        "MISSED" -> Triple("놓친 전화", Color(0xFFFEF3E2), Color(0xFF9A3412))
         "REJECTED" -> Triple("거절", Color(0xFFFCE8E6), Color(0xFFC5221F))
-        "NO_ANSWER" -> Triple("미응답", Color(0xFFF1F5F9), Color(0xFF475569))
+        "NO_ANSWER" -> Triple("부재중", Color(0xFFF1F5F9), Color(0xFF475569))
         else -> return // RECORDED 는 배지 생략
     }
     Surface(color = bg, shape = MaterialTheme.shapes.small) {

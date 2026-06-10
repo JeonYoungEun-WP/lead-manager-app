@@ -142,14 +142,15 @@
 
 ## 3. 통화 유형 (`callType`)
 
-| 값 | 분류 기준 (Android CallLog) | 처리 경로 | 어드민 표시 |
+| 값 | 분류 기준 (Android CallLog) | 처리 경로 | UI 라벨 (앱/어드민 공통) |
 |---|---|---|---|
-| `RECORDED` | OUTGOING + duration>0 / INCOMING + 녹음 존재 | RTZR 전사 → Gemini 요약 → 업로드 | 기본 (배지 없음) |
-| `NO_ANSWER` | OUTGOING + duration=0 | 즉시 업로드 (전사 스킵) | 회색 "미응답" |
-| `MISSED` | MISSED_TYPE | 즉시 업로드 | 주황 "부재중" |
+| `RECORDED` | OUTGOING + duration>0 / INCOMING + 녹음 존재 | RTZR 전사 → Claude 요약 → 업로드 | 파랑 "녹음" |
+| `NO_ANSWER` | OUTGOING + duration=0 **또는** 녹음 전사가 음성사서함 안내멘트로 후판정 | 즉시 업로드 (전사 스킵) | 회색 "부재중" (고객이 안 받음) |
+| `MISSED` | MISSED_TYPE | 즉시 업로드 | 주황 "놓친 전화" (상담사가 못 받음) |
 | `REJECTED` | REJECTED_TYPE (수신 거절) | 즉시 업로드 | 빨강 "거절" |
 
-> 참고: 발신 측에서 상대가 거절한 케이스는 Android API 한계로 NO_ANSWER 로 묶임 (구분 불가).
+> 참고 1: 발신 측에서 상대가 거절한 케이스는 Android API 한계로 NO_ANSWER 로 묶임 (구분 불가).
+> 참고 2: 상대 미응답으로 음성사서함/소리샘에 연결된 발신은 OS 가 duration>0 으로 기록해 RECORDED 로 잡히지만, STT 전사 후 2중 후판정 (앱 키워드 `VoicemailDetector` + Claude `voicemail` 필드) 으로 NO_ANSWER 전환된다.
 
 ---
 

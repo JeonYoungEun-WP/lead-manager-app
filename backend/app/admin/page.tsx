@@ -39,10 +39,11 @@ type TranscriptDetail = {
   audioUrl?: string | null;
 };
 
+// 라벨 규약: 부재중(고객이 안 받음, 발신) / 놓친 전화(상담사가 못 받음, 수신) / 거절 / 녹음
 const CALL_TYPE_LABEL: Record<CallType, string> = {
   RECORDED: "녹음",
-  NO_ANSWER: "미응답",
-  MISSED: "부재중",
+  NO_ANSWER: "부재중",
+  MISSED: "놓친 전화",
   REJECTED: "거절",
 };
 
@@ -318,8 +319,8 @@ export default function AdminPage() {
           >
             <option value="">통화 유형 전체</option>
             <option value="RECORDED">녹음 ({typeCounts.RECORDED})</option>
-            <option value="NO_ANSWER">미응답 ({typeCounts.NO_ANSWER})</option>
-            <option value="MISSED">부재중 ({typeCounts.MISSED})</option>
+            <option value="NO_ANSWER">부재중 ({typeCounts.NO_ANSWER})</option>
+            <option value="MISSED">놓친 전화 ({typeCounts.MISSED})</option>
             <option value="REJECTED">거절 ({typeCounts.REJECTED})</option>
           </select>
           <label style={styles.autoRefreshLabel} title="20초 간격 자동 갱신">
@@ -677,8 +678,8 @@ function Detail({ d, onDownload }: { d: TranscriptDetail; onDownload: () => void
         <div style={styles.contentBox}>
           <div style={styles.nonRecordedBox}>
             <p style={{ margin: 0, fontWeight: 600 }}>
-              {ct === "NO_ANSWER" && "발신했으나 상대가 받지 않았습니다."}
-              {ct === "MISSED" && "수신 통화를 받지 못했습니다 (부재중)."}
+              {ct === "NO_ANSWER" && "고객이 전화를 받지 않았습니다 (부재중)."}
+              {ct === "MISSED" && "고객의 전화를 받지 못했습니다 (놓친 전화)."}
               {ct === "REJECTED" && "수신 통화를 거절했습니다."}
             </p>
             <p style={{ margin: "8px 0 0", color: "#64748b", fontSize: 13 }}>
