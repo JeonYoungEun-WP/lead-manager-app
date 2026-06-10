@@ -57,7 +57,7 @@ function parseTranscriptPath(pathname) {
   );
   if (v2) return { startedAt: Number(v2[1]), leadName: decodeMeta(v2[4]) };
   // v1: transcripts/YYYY-MM/{startedAt}-{uuid}.json — 메타 일체 없음.
-  // leadName 을 추출할 방법이 없지만, 김하준/박기범 도 알 수 없으므로 보존 대상이 아님 → 빈 이름으로 삭제 후보.
+  // leadName 을 추출할 방법이 없으므로 (KEEP_NAMES 매칭 불가) → 빈 이름으로 삭제 후보.
   const v1 = pathname.match(/^transcripts\/[^/]+\/(\d+)-([0-9a-f-]{36})\.json$/i);
   if (v1) return { startedAt: Number(v1[1]), leadName: "" };
   return null;
