@@ -49,6 +49,7 @@ class LeadApp : Application() {
                 AppDatabase.MIGRATION_1_2,
                 AppDatabase.MIGRATION_2_3,
                 AppDatabase.MIGRATION_3_4,
+                AppDatabase.MIGRATION_4_5,
             )
             // 미리 정의되지 않은 다운그레이드/스키마 불일치 안전망 (베타 단계).
             .fallbackToDestructiveMigration(true)

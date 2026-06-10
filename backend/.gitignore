@@ -3,7 +3,13 @@ node_modules/
 .env
 .env.local
 .vercel
+
+# 1회성 정리 스크립트의 보존 설정 (실명 포함될 수 있음)
+scripts/keep-config*.json
 next-env.d.ts
 *.tsbuildinfo
 
 .vercel
+
+# 1회성 정리 스크립트의 보존 설정 (실명 포함될 수 있음)
+scripts/keep-config*.json

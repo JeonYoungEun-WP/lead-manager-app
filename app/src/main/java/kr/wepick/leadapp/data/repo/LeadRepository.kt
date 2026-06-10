@@ -67,6 +67,21 @@ class LeadRepository(
         kr.wepick.leadapp.service.UploadRetryWorker.enqueueImmediate(ctx, callId)
     }
 
+    /** 녹음 audio 파일 업로드 상태 — 사용자가 명시적으로 "녹취 업로드" 버튼을 눌러야 진행. */
+    suspend fun markAudioUploading(id: Long) =
+        callRecordDao.updateAudioUploadState(id, "UPLOADING", null)
+
+    suspend fun markAudioUploadOk(id: Long) =
+        callRecordDao.updateAudioUploadState(id, "OK", null)
+
+    suspend fun markAudioUploadFailed(id: Long, err: String) =
+        callRecordDao.updateAudioUploadState(id, "FAILED", err)
+
+    /** 녹음 audio 업로드 트리거 — 사용자가 통화 상세에서 직접 호출. */
+    fun uploadAudio(ctx: android.content.Context, callId: Long) {
+        kr.wepick.leadapp.service.AudioUploadWorker.enqueueFor(ctx, callId)
+    }
+
     suspend fun pendingCalls(): List<CallRecord> = callRecordDao.pendingForProcessing()
 
     /** 죽은 워커가 남긴 PROCESSING 좀비 레코드를 PENDING 으로 복구. */

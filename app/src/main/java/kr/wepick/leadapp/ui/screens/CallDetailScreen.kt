@@ -27,7 +27,8 @@ fun CallDetailScreen(
 ) {
     val repo = remember { LeadApp.instance.leadRepo }
     var call by remember { mutableStateOf<CallRecord?>(null) }
-    LaunchedEffect(callId) { call = repo.getCall(callId) }
+    var refreshTrigger by remember { mutableStateOf(0) }
+    LaunchedEffect(callId, refreshTrigger) { call = repo.getCall(callId) }
 
     Scaffold(
         topBar = {
@@ -125,6 +126,10 @@ fun CallDetailScreen(
                 }
 
                 UploadStatusCard(c)
+
+                if (isRecorded) {
+                    AudioUploadCard(c, onChanged = { refreshTrigger += 1 })
+                }
             }
         }
     }
@@ -144,6 +149,67 @@ private fun CallTypeBadge(callType: String) {
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
+    }
+}
+
+@Composable
+private fun AudioUploadCard(c: CallRecord, onChanged: () -> Unit) {
+    val context = LocalContext.current
+    val repo = remember { LeadApp.instance.leadRepo }
+    // 사용자가 방금 업로드 버튼을 눌렀을 때만 켜지는 폴링 트리거.
+    // Worker 가 비동기로 markAudioUploading → markAudioUploadOk/Failed 를 박아주므로
+    // 화면이 결과를 보려면 짧게 폴링해서 refetch.
+    var pollCount by remember { mutableStateOf(0) }
+
+    LaunchedEffect(c.id, c.audioUploadStatus, pollCount) {
+        // pollCount > 0 이면 클릭 직후라 짧게 폴링. UPLOADING 진입 후엔 종료될 때까지 폴링.
+        val active = c.audioUploadStatus == "UPLOADING" || pollCount > 0
+        if (!active) return@LaunchedEffect
+        // 최대 ~60초 폴링. WorkManager 지연 + 네트워크 업로드 합쳐 보통 수 초 ~ 수십 초.
+        repeat(30) {
+            kotlinx.coroutines.delay(2_000)
+            onChanged()
+            // 결과가 OK/FAILED 로 바뀌면 LaunchedEffect 가 새 key 로 재시작 → 자연 종료.
+        }
+    }
+
+    val (label, color) = when (c.audioUploadStatus) {
+        "OK" -> "녹취 업로드 완료" to MaterialTheme.colorScheme.primary
+        "UPLOADING" -> "녹취 업로드 중…" to MaterialTheme.colorScheme.onSurfaceVariant
+        "FAILED" -> "녹취 업로드 실패" to MaterialTheme.colorScheme.error
+        else -> "녹취가 어드민에 업로드되지 않았습니다" to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Card {
+        Column(Modifier.padding(16.dp)) {
+            Text(label, color = color, style = MaterialTheme.typography.bodyMedium)
+            if (c.audioUploadStatus == "FAILED" && !c.audioUploadError.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    c.audioUploadError,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            val canUpload = c.audioUploadStatus != "UPLOADING"
+            Button(
+                enabled = canUpload,
+                onClick = {
+                    repo.uploadAudio(context, c.id)
+                    pollCount += 1
+                    onChanged()
+                },
+            ) {
+                val btnLabel = when (c.audioUploadStatus) {
+                    "OK" -> "다시 업로드"
+                    "UPLOADING" -> "업로드 중…"
+                    "FAILED" -> "재시도"
+                    else -> "녹취 업로드"
+                }
+                Text(btnLabel)
+            }
+        }
     }
 }
 

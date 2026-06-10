@@ -48,8 +48,7 @@ class SttWorker(
         }
 
         val prefs = applicationContext.appPreferences.data.first()
-        val backendUrl = prefs[KEY_BACKEND_URL]?.trim()?.trimEnd('/').orEmpty()
-        if (backendUrl.isBlank()) return Result.success()
+        val backendUrl = kr.wepick.leadapp.util.effectiveBackendUrl(prefs[KEY_BACKEND_URL])
         val agentName = prefs[KEY_AGENT_NAME]?.trim().orEmpty()
 
         val http = OkHttpClient.Builder()
