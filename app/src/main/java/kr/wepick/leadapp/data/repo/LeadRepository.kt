@@ -30,6 +30,9 @@ class LeadRepository(
     suspend fun deleteLead(lead: Lead) = leadDao.delete(lead)
 
     fun observeCalls(): Flow<List<CallRecord>> = callRecordDao.observeAll()
+
+    /** 통화 기록 + 리드 이름 (통화내역 화면용). */
+    fun observeCallsWithLeadName() = callRecordDao.observeAllWithLeadName()
     fun observeCallsByLead(leadId: Long): Flow<List<CallRecord>> =
         callRecordDao.observeByLead(leadId)
 

@@ -1,17 +1,30 @@
 package kr.wepick.leadapp.data.db
 
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
+/** 통화 기록 + 매칭된 리드 이름 (목록 표시용). 리드 미매칭/삭제 시 null. */
+data class CallWithLeadName(
+    @Embedded val call: CallRecord,
+    val leadName: String?,
+)
+
 @Dao
 interface CallRecordDao {
 
     @Query("SELECT * FROM call_records ORDER BY startedAt DESC")
     fun observeAll(): Flow<List<CallRecord>>
+
+    @Query(
+        "SELECT cr.*, l.name AS leadName FROM call_records cr " +
+        "LEFT JOIN leads l ON l.id = cr.leadId ORDER BY cr.startedAt DESC"
+    )
+    fun observeAllWithLeadName(): Flow<List<CallWithLeadName>>
 
     @Query("SELECT * FROM call_records WHERE leadId = :leadId ORDER BY startedAt DESC")
     fun observeByLead(leadId: Long): Flow<List<CallRecord>>
