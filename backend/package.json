@@ -8,13 +8,11 @@
     "start": "next start"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.63",
+    "@anthropic-ai/sdk": "^0.104.1",
     "@vercel/blob": "^2.3.3",
-    "ai": "^6.0.161",
     "next": "16.1.6",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "zod": "^3.23.8"
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@types/node": "^20.19.34",

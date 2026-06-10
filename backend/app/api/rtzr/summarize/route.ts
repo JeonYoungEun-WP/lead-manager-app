@@ -1,47 +1,55 @@
 import { NextRequest } from "next/server";
-import { google } from "@ai-sdk/google";
-import { generateObject } from "ai";
-import { z } from "zod";
+import Anthropic from "@anthropic-ai/sdk";
 import { requireAppToken } from "../../../../lib/auth";
 
 /**
  * POST /api/rtzr/summarize
  *
- * 전사 텍스트를 받아서 Gemini 2.5 Flash 로 핵심 요약을 "스트리밍" 생성.
+ * 전사 텍스트를 받아서 Claude 로 핵심 요약을 생성.
  *
  * 요청: application/json
  *   { transcript: string, leadName?: string, phone?: string }
  *
- * 응답: application/x-ndjson (한 줄당 JSON, 부분 객체 누적)
+ * 응답: application/x-ndjson — 최종 JSON 한 줄 (앱은 마지막 줄만 파싱)
  *   {"summary": [...], "keyPoints": [...]}\n
- *   ...
- *   // 마지막 줄이 최종 결과
  *
- * 에러 시: {"error": "..."}\n
+ * 에러 시: {"error": "..."}\n + 4xx/5xx
  *
- * 환경변수: GOOGLE_GENERATIVE_AI_API_KEY
+ * 환경변수: ANTHROPIC_API_KEY
  */
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = "claude-opus-4-8";
 
-const summarySchema = z.object({
-  summary: z
-    .array(z.string())
-    .describe(
-      "전체 흐름을 5~6줄로 요약. 각 줄 50자 이내. 재연락 요청이 감지되면 첫 줄을 정확히 '[#재연락 YYYY-MM-DDTHH:MM]' (KST, 시각 모르면 '[#재연락]') 형태로 시작하고 그 뒤에 메모를 적는다.",
-    ),
-  keyPoints: z
-    .array(
-      z.object({
-        title: z.string().describe("핵심 쟁점 제목 (12자 이내)"),
-        detail: z.string().describe("상세 설명 (60자 이내)"),
-      }),
-    )
-    .describe("핵심 쟁점·액션 아이템 (최대 6개)"),
-});
+/** 구조화 출력 스키마 — 앱(SttWorker.fetchSummary)이 기대하는 응답 형태와 1:1. */
+const SUMMARY_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "전체 흐름을 5~6줄로 요약. 각 줄 50자 이내. 재연락 요청이 감지되면 첫 줄을 정확히 '[#재연락 YYYY-MM-DDTHH:MM]' (KST, 시각 모르면 '[#재연락]') 형태로 시작하고 그 뒤에 메모를 적는다.",
+    },
+    keyPoints: {
+      type: "array",
+      description: "핵심 쟁점·액션 아이템 (최대 6개)",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "핵심 쟁점 제목 (12자 이내)" },
+          detail: { type: "string", description: "상세 설명 (60자 이내)" },
+        },
+        required: ["title", "detail"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["summary", "keyPoints"],
+  additionalProperties: false,
+} as const;
 
 /** 한국 표준시(KST) 기준 ISO 'YYYY-MM-DDTHH:MM' 반환. */
 function nowKstIso(): string {
@@ -53,14 +61,10 @@ function nowKstIso(): string {
 export async function POST(req: NextRequest) {
   const authErr = requireAppToken(req);
   if (authErr) {
-    const line = JSON.stringify({ error: "인증 실패" }) + "\n";
-    return new Response(line, {
-      status: 401,
-      headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
-    });
+    return ndjsonError("인증 실패", 401);
   }
-  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    return ndjsonError("GOOGLE_GENERATIVE_AI_API_KEY 가 서버에 설정되지 않았습니다.", 503);
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return ndjsonError("ANTHROPIC_API_KEY 가 서버에 설정되지 않았습니다.", 503);
   }
 
   let transcript = "";
@@ -104,27 +108,43 @@ ${transcript.slice(0, 24000)}
 - 재연락 요청이 없으면 마커 없이 일반 요약만 출력
 - 마커는 반드시 'summary' 배열의 **첫 번째 요소** 안에서 첫 글자부터 시작해야 한다.`;
 
-  // 비스트리밍 — 앱(SttWorker.fetchSummary)은 응답의 마지막 줄만 파싱하므로
-  // 스트리밍 이점이 없고, streamObject 는 내부 오류를 조용히 삼키거나
-  // (빈 200) 미종결 hang (504) 을 만들 수 있어 generateObject 로 단순화.
+  const client = new Anthropic();
+
   try {
-    const { object } = await generateObject({
-      model: google(MODEL),
-      schema: summarySchema,
-      prompt,
-      temperature: 0.3,
+    const response = await client.messages.create({
+      model: MODEL,
+      // 출력이 짧게 제약된 요약 (5~6줄 + 핵심 포인트 6개) — 4096 이면 충분.
+      max_tokens: 4096,
+      thinking: { type: "adaptive" },
+      messages: [{ role: "user", content: prompt }],
+      output_config: {
+        format: { type: "json_schema", schema: SUMMARY_SCHEMA },
+      },
     });
-    return new Response(JSON.stringify(object) + "\n", {
+
+    if (response.stop_reason === "refusal" || response.stop_reason === "max_tokens") {
+      return ndjsonError(`요약 생성 실패 (stop_reason: ${response.stop_reason})`, 502);
+    }
+
+    // output_config.format 보장: 첫 text 블록이 스키마에 맞는 JSON.
+    const text = response.content.find((b) => b.type === "text")?.text ?? "";
+    if (!text) {
+      return ndjsonError("요약 응답에 text 블록 없음", 502);
+    }
+
+    return new Response(text.trim() + "\n", {
       headers: {
         "Content-Type": "application/x-ndjson; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
       },
     });
   } catch (e) {
-    const cause = (e as { cause?: Error }).cause;
-    const msg =
-      [(e as Error).message, cause?.message].filter(Boolean).join(" / ") ||
-      "unknown";
+    let msg: string;
+    if (e instanceof Anthropic.APIError) {
+      msg = `Claude API ${e.status}: ${e.message}`;
+    } else {
+      msg = (e as Error).message || "unknown";
+    }
     console.error("[summarize] 생성 실패:", msg);
     return ndjsonError(`요약 생성 실패: ${msg}`, 502);
   }
