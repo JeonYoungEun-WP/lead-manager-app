@@ -54,9 +54,15 @@ class CallFolderScanWorker(
                               it.name?.endsWith(".3gp", true) == true)
             }
 
+            val minFileTs = System.currentTimeMillis() - FOLDER_SCAN_LOOKBACK_MS
             for (file in files) {
                 val name = file.name ?: continue
                 val fileTs = PhoneUtils.extractTimestampFromFilename(name) ?: file.lastModified()
+
+                // 오래된 녹음은 신규 등록하지 않는다 — 앱 재설치/DB 정리 후 과거 파일이
+                // 일괄 부활해서 RTZR 비용 + 어드민 재오염을 일으키는 사고 방지.
+                // (CallLog 스캔의 24시간 lookback 과 같은 취지)
+                if (fileTs < minFileTs) continue
 
                 // 이미 이 파일이 붙은 기록이 있으면 스킵 (재스캔 중복 방지)
                 if (repo.hasCallForFileUri(file.uri.toString())) continue
@@ -153,5 +159,8 @@ class CallFolderScanWorker(
 
         /** CallLog 스캔 시 거슬러 올라갈 시간 — 최근 24시간 이내 항목만 본다 (옛날 건은 무시). */
         private const val CALLLOG_LOOKBACK_MS = 24L * 60 * 60 * 1000L
+
+        /** 녹음 폴더 스캔 시 처리할 파일의 최대 나이 — 48시간보다 오래된 파일은 신규 등록 안 함. */
+        private const val FOLDER_SCAN_LOOKBACK_MS = 48L * 60 * 60 * 1000L
     }
 }
