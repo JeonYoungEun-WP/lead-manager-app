@@ -118,10 +118,18 @@ ${transcript.slice(0, 24000)}
         for await (const partial of result.partialObjectStream) {
           controller.enqueue(encoder.encode(JSON.stringify(partial) + "\n"));
         }
+        // AI SDK 는 스트리밍 중 오류를 partialObjectStream 에 throw 하지 않고
+        // 스트림을 조용히 끝낸다 → 빈 200 응답으로 위장됨. 최종 객체 확정을
+        // 기다려서 (인증/쿼터/모델 오류 포함) 반드시 표면화한다.
+        await result.object;
         controller.close();
       } catch (e) {
+        const cause = (e as { cause?: Error }).cause;
+        const msg = [(e as Error).message, cause?.message]
+          .filter(Boolean)
+          .join(" / ");
         controller.enqueue(
-          encoder.encode(JSON.stringify({ error: (e as Error).message }) + "\n"),
+          encoder.encode(JSON.stringify({ error: msg || "unknown" }) + "\n"),
         );
         controller.close();
       }
