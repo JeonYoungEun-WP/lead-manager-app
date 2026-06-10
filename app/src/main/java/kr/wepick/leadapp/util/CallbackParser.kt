@@ -19,8 +19,14 @@ object CallbackParser {
         val note: String,
     )
 
+    // 마커는 시각 형식과 무관하게 인식 — 시각이 깨져도 재연락 자체는 등록돼야 한다.
+    // ([^\]]+ 로 ] 전까지 통째로 캡처한 뒤 시각은 별도 정규화)
     private val CALLBACK_RE =
-        Regex("""\[#재연락(?:\s+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}))?]\s*(.*)""")
+        Regex("""\[#재연락(?:\s+([^\]]+))?]\s*(.*)""")
+
+    /** AI 출력의 자릿수 편차 허용: 2026-4-3T9:00 / 'T' 대신 공백도 인정. */
+    private val LENIENT_TIME_RE =
+        Regex("""^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})$""")
 
     /** "1. " 같은 leading 번호 제거 후 첫 줄을 매치. */
     private val LEADING_NUMBER_RE = Regex("""^\s*\d+\.\s*""")
@@ -32,13 +38,22 @@ object CallbackParser {
             ?.trim()
             ?: return null
         val m = CALLBACK_RE.find(firstLine) ?: return null
-        val iso = m.groupValues.getOrNull(1)?.takeIf { it.isNotBlank() }
+        val rawTime = m.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }
+        // 시각 정규화 실패 시에도 마커는 유효 — "시각 미정" 재연락으로 등록
+        val iso = rawTime?.let { normalizeIso(it) }
         val note = m.groupValues.getOrNull(2)?.trim().orEmpty()
         return Callback(
             callbackAtIso = iso,
             callbackAtMs = iso?.let { kstIsoToMs(it) },
             note = note,
         )
+    }
+
+    /** 자릿수 편차를 zero-pad 해 'YYYY-MM-DDTHH:MM' 으로 정규화. 해석 불가면 null. */
+    private fun normalizeIso(raw: String): String? {
+        val m = LENIENT_TIME_RE.matchEntire(raw) ?: return null
+        val (y, mo, d, h, mi) = m.destructured
+        return "%s-%02d-%02dT%02d:%s".format(y, mo.toInt(), d.toInt(), h.toInt(), mi)
     }
 
     /** "YYYY-MM-DDTHH:MM" (KST 가정) → UTC epoch ms */

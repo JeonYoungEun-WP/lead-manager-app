@@ -59,8 +59,33 @@ class CallbackParserTest {
     }
 
     @Test
-    fun malformedTime_failsToMatch() {
-        // 시각 형식이 깨지면 마커 전체가 매치되지 않음 (현재 동작 문서화)
-        assertNull(CallbackParser.extract("[#재연락 2026-4-3T9:00] 메모"))
+    fun lenientTime_zeroPadNormalized() {
+        // AI 가 0 패딩을 빼먹어도 시각을 정규화해서 인식
+        val cb = CallbackParser.extract("[#재연락 2026-4-3T9:00] 메모")
+        assertNotNull(cb)
+        assertEquals("2026-04-03T09:00", cb!!.callbackAtIso)
+        assertEquals("메모", cb.note)
+        val expected = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+            clear()
+            set(2026, Calendar.APRIL, 3, 0, 0, 0) // KST 09:00 == UTC 00:00
+        }.timeInMillis
+        assertEquals(expected, cb.callbackAtMs)
+    }
+
+    @Test
+    fun lenientTime_spaceSeparatorAccepted() {
+        val cb = CallbackParser.extract("[#재연락 2026-05-01 14:30] 오후 통화")
+        assertNotNull(cb)
+        assertEquals("2026-05-01T14:30", cb!!.callbackAtIso)
+    }
+
+    @Test
+    fun unparsableTime_keepsMarkerAsUndated() {
+        // 시각을 전혀 해석 못 해도 재연락 자체는 "시각 미정" 으로 등록
+        val cb = CallbackParser.extract("[#재연락 내일쯤] 다시 연락 요청")
+        assertNotNull(cb)
+        assertNull(cb!!.callbackAtIso)
+        assertNull(cb.callbackAtMs)
+        assertEquals("다시 연락 요청", cb.note)
     }
 }
