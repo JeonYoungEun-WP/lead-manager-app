@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { google } from "@ai-sdk/google";
-import { streamObject } from "ai";
+import { generateObject } from "ai";
 import { z } from "zod";
 import { requireAppToken } from "../../../../lib/auth";
 
@@ -104,45 +104,30 @@ ${transcript.slice(0, 24000)}
 - 재연락 요청이 없으면 마커 없이 일반 요약만 출력
 - 마커는 반드시 'summary' 배열의 **첫 번째 요소** 안에서 첫 글자부터 시작해야 한다.`;
 
-  const result = streamObject({
-    model: google(MODEL),
-    schema: summarySchema,
-    prompt,
-    temperature: 0.3,
-  });
-
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      try {
-        for await (const partial of result.partialObjectStream) {
-          controller.enqueue(encoder.encode(JSON.stringify(partial) + "\n"));
-        }
-        // AI SDK 는 스트리밍 중 오류를 partialObjectStream 에 throw 하지 않고
-        // 스트림을 조용히 끝낸다 → 빈 200 응답으로 위장됨. 최종 객체 확정을
-        // 기다려서 (인증/쿼터/모델 오류 포함) 반드시 표면화한다.
-        await result.object;
-        controller.close();
-      } catch (e) {
-        const cause = (e as { cause?: Error }).cause;
-        const msg = [(e as Error).message, cause?.message]
-          .filter(Boolean)
-          .join(" / ");
-        controller.enqueue(
-          encoder.encode(JSON.stringify({ error: msg || "unknown" }) + "\n"),
-        );
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "application/x-ndjson; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      "X-Accel-Buffering": "no",
-    },
-  });
+  // 비스트리밍 — 앱(SttWorker.fetchSummary)은 응답의 마지막 줄만 파싱하므로
+  // 스트리밍 이점이 없고, streamObject 는 내부 오류를 조용히 삼키거나
+  // (빈 200) 미종결 hang (504) 을 만들 수 있어 generateObject 로 단순화.
+  try {
+    const { object } = await generateObject({
+      model: google(MODEL),
+      schema: summarySchema,
+      prompt,
+      temperature: 0.3,
+    });
+    return new Response(JSON.stringify(object) + "\n", {
+      headers: {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+      },
+    });
+  } catch (e) {
+    const cause = (e as { cause?: Error }).cause;
+    const msg =
+      [(e as Error).message, cause?.message].filter(Boolean).join(" / ") ||
+      "unknown";
+    console.error("[summarize] 생성 실패:", msg);
+    return ndjsonError(`요약 생성 실패: ${msg}`, 502);
+  }
 }
 
 function ndjsonError(message: string, status: number): Response {
