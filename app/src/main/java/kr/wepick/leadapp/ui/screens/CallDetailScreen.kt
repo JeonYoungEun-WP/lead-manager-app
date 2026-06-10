@@ -27,8 +27,12 @@ fun CallDetailScreen(
 ) {
     val repo = remember { LeadApp.instance.leadRepo }
     var call by remember { mutableStateOf<CallRecord?>(null) }
+    var leadName by remember { mutableStateOf<String?>(null) }
     var refreshTrigger by remember { mutableStateOf(0) }
-    LaunchedEffect(callId, refreshTrigger) { call = repo.getCall(callId) }
+    LaunchedEffect(callId, refreshTrigger) {
+        call = repo.getCall(callId)
+        leadName = call?.leadId?.let { repo.getLead(it)?.name }?.takeIf { it.isNotBlank() }
+    }
 
     Scaffold(
         topBar = {
@@ -56,12 +60,20 @@ fun CallDetailScreen(
                     Column(Modifier.padding(16.dp)) {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             Text(
-                                PhoneUtils.format(c.phone),
+                                // 고객명 우선 — 리드 미매칭이면 번호
+                                leadName ?: PhoneUtils.format(c.phone),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.weight(1f),
                             )
                             CallTypeBadge(c.callType)
+                        }
+                        if (leadName != null) {
+                            Text(
+                                PhoneUtils.format(c.phone),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
                         }
                         Text(
                             SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())

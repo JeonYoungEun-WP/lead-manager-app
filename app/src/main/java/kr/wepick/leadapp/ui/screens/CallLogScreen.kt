@@ -13,6 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kr.wepick.leadapp.LeadApp
 import kr.wepick.leadapp.data.db.CallRecord
+import kr.wepick.leadapp.data.db.CallWithLeadName
 import kr.wepick.leadapp.util.PhoneUtils
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -22,7 +23,7 @@ import java.util.Locale
 @Composable
 fun CallLogScreen(onCallClick: (Long) -> Unit) {
     val repo = remember { LeadApp.instance.leadRepo }
-    val calls by repo.observeCalls().collectAsState(initial = emptyList())
+    val calls by repo.observeCallsWithLeadName().collectAsState(initial = emptyList())
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("통화내역") }) },
@@ -37,8 +38,8 @@ fun CallLogScreen(onCallClick: (Long) -> Unit) {
             }
         } else {
             LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-                items(calls, key = { it.id }) { c ->
-                    CallRow(c, onClick = { onCallClick(c.id) })
+                items(calls, key = { it.call.id }) { c ->
+                    CallRow(c, onClick = { onCallClick(c.call.id) })
                     HorizontalDivider()
                 }
             }
@@ -47,19 +48,22 @@ fun CallLogScreen(onCallClick: (Long) -> Unit) {
 }
 
 @Composable
-private fun CallRow(c: CallRecord, onClick: () -> Unit) {
+private fun CallRow(item: CallWithLeadName, onClick: () -> Unit) {
+    val c = item.call
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(Modifier.weight(1f)) {
+            // 고객명 우선 — 리드 미매칭 통화는 번호로 폴백
             Text(
-                PhoneUtils.format(c.phone),
+                item.leadName?.takeIf { it.isNotBlank() } ?: PhoneUtils.format(c.phone),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(c.startedAt)),
+                "${PhoneUtils.format(c.phone)} · " +
+                    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(c.startedAt)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
