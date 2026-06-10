@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { list, put } from "@vercel/blob";
 import { requireAppToken } from "../../../lib/auth";
+import {
+  buildTranscriptPathname,
+  parseAudioPathname,
+  parseTranscriptPathname,
+  type CallType,
+} from "../../../lib/blob-path";
 
 /**
  * POST /api/transcripts
@@ -19,30 +25,8 @@ import { requireAppToken } from "../../../lib/auth";
 
 const SEP = "_";
 
-function encodeMeta(s: string): string {
-  return encodeURIComponent(s).replace(/_/g, "%5F");
-}
-
-function decodeMeta(s: string): string {
-  try {
-    return decodeURIComponent(s);
-  } catch {
-    return s;
-  }
-}
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/**
- * 통화 유형.
- * - RECORDED: 정상적으로 통화 연결되어 녹음 + 전사된 케이스 (기본).
- * - NO_ANSWER: 발신했으나 상대 미응답 (CallLog OUTGOING + duration=0).
- * - MISSED: 수신했으나 받지 못함 (CallLog MISSED).
- * - REJECTED: 수신 거절 (CallLog REJECTED).
- * NO_ANSWER/MISSED/REJECTED 는 녹음 파일이 없으므로 transcript / summary 가 비어있다.
- */
-type CallType = "RECORDED" | "NO_ANSWER" | "MISSED" | "REJECTED";
 
 type TranscriptPayload = {
   agentName: string;
@@ -153,15 +137,16 @@ export async function POST(req: NextRequest) {
   const uploadedAt = Date.now();
   const record = { id, ...body, uploadedAt };
 
-  const agentEnc = encodeMeta(agentName);
-  const phoneEnc = encodeMeta(body.leadPhone);
-  const nameEnc = encodeMeta(body.leadName || "-");
-  // 통화 길이 — 어드민 목록에 N+1 fetch 없이 표시하려고 path 에 박는다. 미보유시 0.
-  const dur = (body.durationSec != null && body.durationSec > 0) ? body.durationSec : 0;
-  // v4 포맷: {startedAt}_{agent}_{phone}_{name}_{callType}_{durationSec}_{uuid}.json
-  // callType 토큰들 (RECORDED|NO_ANSWER|MISSED|REJECTED) 은 [A-Z_]+ 패턴이라
-  // 인접한 [^_/]+ greedy 매칭과 충돌하지 않음 (정규식 alternation 으로 정확 매칭).
-  const path = `transcripts/${ym}/${body.startedAt}${SEP}${agentEnc}${SEP}${phoneEnc}${SEP}${nameEnc}${SEP}${callType}${SEP}${dur}${SEP}${id}.json`;
+  // v4 포맷 path — 생성/파싱 규약은 lib/blob-path.ts 한 곳에서 관리.
+  const path = buildTranscriptPathname({
+    startedAt: body.startedAt,
+    agentName,
+    leadPhone: body.leadPhone,
+    leadName: body.leadName || "-",
+    callType,
+    durationSec: body.durationSec,
+    id,
+  });
 
   try {
     const blob = await put(path, JSON.stringify(record), {
@@ -193,10 +178,8 @@ async function buildAudioUrlMap(): Promise<Map<number, string>> {
       (a, b) => new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime(),
     );
     for (const b of sorted) {
-      const m = b.pathname.match(/audios\/[^/]+\/(\d+)_\d+\.[a-z0-9]+$/i);
-      if (!m) continue;
-      const startedAt = Number(m[1]);
-      if (!Number.isFinite(startedAt)) continue;
+      const startedAt = parseAudioPathname(b.pathname);
+      if (startedAt == null) continue;
       map.set(startedAt, b.url);
     }
   } catch {
@@ -215,84 +198,16 @@ export async function GET(_req: NextRequest) {
     ]);
     const items = blobs
       .map((b) => {
-        // v4 (현행): {startedAt}_{agent}_{phone}_{name}_{callType}_{durationSec}_{uuid}.json
-        const mV4 = b.pathname.match(
-          /transcripts\/[^/]+\/(\d+)_([^_/]+)_([^_/]+)_([^_/]+)_(RECORDED|NO_ANSWER|MISSED|REJECTED)_(\d+)_([0-9a-f-]{36})\.json$/i,
-        );
-        if (mV4) {
-          const d = Number(mV4[6]);
-          return {
-            id: mV4[7],
-            url: b.url,
-            pathname: b.pathname,
-            startedAt: Number(mV4[1]),
-            agentName: decodeMeta(mV4[2]),
-            leadPhone: decodeMeta(mV4[3]),
-            leadName: decodeMeta(mV4[4]),
-            callType: mV4[5].toUpperCase() as CallType,
-            durationSec: d > 0 ? d : null,
-            size: b.size,
-            uploadedAt: b.uploadedAt,
-          };
-        }
-        // v3: {startedAt}_{agent}_{phone}_{name}_{callType}_{uuid}.json — durationSec 정보 없음
-        const mV3 = b.pathname.match(
-          /transcripts\/[^/]+\/(\d+)_([^_/]+)_([^_/]+)_([^_/]+)_(RECORDED|NO_ANSWER|MISSED|REJECTED)_([0-9a-f-]{36})\.json$/i,
-        );
-        if (mV3) {
-          return {
-            id: mV3[6],
-            url: b.url,
-            pathname: b.pathname,
-            startedAt: Number(mV3[1]),
-            agentName: decodeMeta(mV3[2]),
-            leadPhone: decodeMeta(mV3[3]),
-            leadName: decodeMeta(mV3[4]),
-            callType: mV3[5].toUpperCase() as CallType,
-            durationSec: null,
-            size: b.size,
-            uploadedAt: b.uploadedAt,
-          };
-        }
-        // v2: {startedAt}_{agent}_{phone}_{name}_{uuid}.json — callType 정보 없음 → RECORDED 가정
-        const mV2 = b.pathname.match(
-          /transcripts\/[^/]+\/(\d+)_([^_/]+)_([^_/]+)_([^_/]+)_([0-9a-f-]{36})\.json$/i,
-        );
-        if (mV2) {
-          return {
-            id: mV2[5],
-            url: b.url,
-            pathname: b.pathname,
-            startedAt: Number(mV2[1]),
-            agentName: decodeMeta(mV2[2]),
-            leadPhone: decodeMeta(mV2[3]),
-            leadName: decodeMeta(mV2[4]),
-            callType: "RECORDED" as CallType,
-            durationSec: null,
-            size: b.size,
-            uploadedAt: b.uploadedAt,
-          };
-        }
-        // v1 (legacy): {startedAt}-{uuid}.json — 메타 일체 미보유
-        const mV1 = b.pathname.match(
-          /transcripts\/[^/]+\/(\d+)-([0-9a-f-]{36})\.json$/i,
-        );
-        if (mV1) {
-          return {
-            id: mV1[2],
-            url: b.url,
-            pathname: b.pathname,
-            startedAt: Number(mV1[1]),
-            agentName: "",
-            leadPhone: "",
-            leadName: "",
-            callType: "RECORDED" as CallType,
-            durationSec: null,
-            size: b.size,
-            uploadedAt: b.uploadedAt,
-          };
-        }
-        return null;
+        // v4 → v1 하위 호환 파싱은 lib/blob-path.ts 가 담당.
+        const meta = parseTranscriptPathname(b.pathname);
+        if (!meta) return null;
+        return {
+          ...meta,
+          url: b.url,
+          pathname: b.pathname,
+          size: b.size,
+          uploadedAt: b.uploadedAt,
+        };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
       .map((it) => ({ ...it, audioUrl: audioUrlMap.get(it.startedAt) ?? null }))

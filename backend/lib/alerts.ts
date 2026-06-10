@@ -20,8 +20,20 @@ export type CallbackAlert = {
 
 export type AlertItem = CallbackAlert;
 
-const CALLBACK_RE =
-  /\[#재연락(?:\s+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}))?\]\s*(.*)/;
+// 마커는 시각 형식과 무관하게 인식 — 시각이 깨져도 재연락 자체는 등록돼야 한다.
+// (앱 CallbackParser.kt 와 1:1 동일 규약 유지)
+const CALLBACK_RE = /\[#재연락(?:\s+([^\]]+))?\]\s*(.*)/;
+
+/** AI 출력의 자릿수 편차 허용: 2026-4-3T9:00 / 'T' 대신 공백도 인정. */
+const LENIENT_TIME_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})$/;
+
+/** 자릿수 편차를 zero-pad 해 'YYYY-MM-DDTHH:MM' 으로 정규화. 해석 불가면 null. */
+export function normalizeIso(raw: string): string | null {
+  const m = raw.trim().match(LENIENT_TIME_RE);
+  if (!m) return null;
+  const pad = (s: string) => s.padStart(2, "0");
+  return `${m[1]}-${pad(m[2])}-${pad(m[3])}T${pad(m[4])}:${m[5]}`;
+}
 
 /** KST ISO 'YYYY-MM-DDTHH:MM' → UTC 밀리초 */
 function kstIsoToMs(iso: string): number {
@@ -37,7 +49,9 @@ export function extractCallback(summary: string | undefined): CallbackAlert | nu
   const firstLine = summary.split("\n")[0]?.replace(/^\s*\d+\.\s*/, "").trim() ?? "";
   const m = firstLine.match(CALLBACK_RE);
   if (!m) return null;
-  const iso = m[1] ?? null;
+  const rawTime = m[1]?.trim() || null;
+  // 시각 정규화 실패 시에도 마커는 유효 — "시각 미정" 재연락으로 등록
+  const iso = rawTime ? normalizeIso(rawTime) : null;
   return {
     type: "callback",
     callbackAtIso: iso,
