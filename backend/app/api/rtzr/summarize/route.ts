@@ -46,8 +46,13 @@ const SUMMARY_SCHEMA = {
         additionalProperties: false,
       },
     },
+    voicemail: {
+      type: "boolean",
+      description:
+        "실제 상대방(사람)과의 대화가 없는 녹음이면 true — 음성사서함/소리샘/자동응답 안내멘트, 통화연결음, 무음만 있는 경우. 짧더라도 실제 대화가 있으면 false.",
+    },
   },
-  required: ["summary", "keyPoints"],
+  required: ["summary", "keyPoints", "voicemail"],
   additionalProperties: false,
 } as const;
 
@@ -97,6 +102,10 @@ ${transcript.slice(0, 24000)}
 작업:
 1) summary: 전체 흐름을 5줄로 요약. 각 줄 50자 이내. 구체적인 수치/이름/다음 단계/우려사항 포함.
 2) keyPoints: 핵심 쟁점·액션 아이템을 최대 6개. title 은 12자 이내, detail 은 60자 이내.
+3) voicemail: 이 녹음이 실제 상대방(사람)과의 대화인지 판단.
+   - 상대가 받지 않아 음성사서함/소리샘/자동응답 안내멘트만 녹음됐거나 통화연결음·무음뿐이면 true
+   - 짧더라도 실제 사람 간 대화가 있으면 false
+   - voicemail=true 면 summary 는 ["음성사서함/자동응답 — 통화 연결 안 됨"] 한 줄, keyPoints 는 빈 배열로.
 
 추가 규칙 — 재연락 감지:
 - 통화 상대가 "나중에 다시 전화 주세요", "내일 오후 3시에", "한 시간 후에", "바쁘니까 다시" 등 재연락을 요청한 경우:
