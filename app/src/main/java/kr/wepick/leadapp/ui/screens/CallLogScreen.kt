@@ -94,7 +94,7 @@ private fun StatusBadge(c: CallRecord) {
         "REJECTED" -> Triple("거절", Color(0xFFFCE8E6), Color(0xFFC5221F))
         "NO_ANSWER" -> Triple("부재중", Color(0xFFF1F5F9), Color(0xFF475569))
         else -> when (c.status) {
-            "DONE" -> Triple("녹음", Color(0xFFE0F2FE), Color(0xFF075985))
+            "DONE" -> Triple("통화성공", Color(0xFFE0F2FE), Color(0xFF075985))
             "PROCESSING" -> Triple("처리중", Color(0xFFE8F0FE), Color(0xFF1967D2))
             "FAILED" -> Triple("실패", Color(0xFFFCE8E6), Color(0xFFC5221F))
             "AWAITING_FILE" -> Triple("녹음대기", Color(0xFFF3E8FD), Color(0xFF6B2FD1))
