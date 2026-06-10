@@ -211,6 +211,9 @@ fun SettingsScreen() {
                     Button(onClick = {
                         scope.launch {
                             context.appPreferences.edit { it[KEY_AGENT_NAME] = agentInput.trim() }
+                            android.widget.Toast.makeText(
+                                context, "저장되었습니다", android.widget.Toast.LENGTH_SHORT,
+                            ).show()
                         }
                     }) { Text("저장") }
                 }
@@ -238,6 +241,9 @@ fun SettingsScreen() {
                         onClick = {
                             scope.launch {
                                 context.appPreferences.edit { it[KEY_BACKEND_URL] = urlInput.trim() }
+                                android.widget.Toast.makeText(
+                                    context, "저장되었습니다", android.widget.Toast.LENGTH_SHORT,
+                                ).show()
                             }
                         }
                     ) { Text("저장") }

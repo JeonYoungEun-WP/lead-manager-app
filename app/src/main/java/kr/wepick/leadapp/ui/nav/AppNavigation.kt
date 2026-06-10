@@ -79,13 +79,6 @@ fun AppRoot(initialCallId: Long? = null) {
                 LeadListScreen(
                     onLeadClick = { navController.navigate(Route.LeadDetail.build(it)) },
                     onAddClick = { navController.navigate(Route.LeadEdit.build(0)) },
-                    onGoSettings = {
-                        navController.navigate(Route.Settings.path) {
-                            popUpTo(Route.LeadList.path) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
                 )
             }
             composable(Route.CallLog.path) {

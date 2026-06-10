@@ -16,8 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kr.wepick.leadapp.LeadApp
 import kr.wepick.leadapp.data.db.Lead
 import kr.wepick.leadapp.util.PhoneUtils
@@ -28,11 +30,12 @@ import kr.wepick.leadapp.util.appPreferences
 fun LeadListScreen(
     onLeadClick: (Long) -> Unit,
     onAddClick: () -> Unit,
-    onGoSettings: () -> Unit = {},
 ) {
     val repo = remember { LeadApp.instance.leadRepo }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
+    var nameInput by rememberSaveable { mutableStateOf("") }
     val flow: Flow<List<Lead>> = remember(query) {
         if (query.isBlank()) repo.observeLeads() else repo.searchLeads(query)
     }
@@ -60,36 +63,60 @@ fun LeadListScreen(
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            // 상담사 이름 미설정 배너 — null(로딩 중)일 땐 표시 안 함 (깜빡임 방지)
+            // 상담사 이름 미설정 — 첫 화면에서 바로 입력. 저장되면 카드가 즉시 사라진다.
+            // null(로딩 중)일 땐 표시 안 함 (깜빡임 방지)
             if (agentName != null && agentName!!.isBlank()) {
                 Surface(
                     color = MaterialTheme.colorScheme.tertiaryContainer,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 12.dp),
                     shape = MaterialTheme.shapes.medium,
-                    onClick = onGoSettings,
                 ) {
-                    Row(
-                        Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Icon(
-                            Icons.Filled.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                        )
-                        Column(Modifier.weight(1f)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                Icons.Filled.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            )
                             Text(
-                                "상담사 이름을 설정해주세요",
+                                "상담사 이름을 입력해주세요",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onTertiaryContainer,
                             )
-                            Text(
-                                "이름이 없으면 관리자 화면에 'unknown' 으로 표시됩니다. 탭해서 설정으로 이동.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        }
+                        Text(
+                            "통화 기록이 관리자 화면에 이 이름으로 표시됩니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OutlinedTextField(
+                                value = nameInput,
+                                onValueChange = { nameInput = it },
+                                placeholder = { Text("예: 박상담") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
                             )
+                            Button(
+                                enabled = nameInput.isNotBlank(),
+                                onClick = {
+                                    val name = nameInput.trim()
+                                    scope.launch {
+                                        context.appPreferences.edit { it[KEY_AGENT_NAME] = name }
+                                        android.widget.Toast.makeText(
+                                            context, "저장되었습니다: $name",
+                                            android.widget.Toast.LENGTH_SHORT,
+                                        ).show()
+                                    }
+                                },
+                            ) { Text("저장") }
                         }
                     }
                 }
