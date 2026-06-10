@@ -216,15 +216,20 @@ fun SettingsScreen() {
                 }
             }
 
-            // 백엔드 URL
+            // 백엔드 URL — 비워두면 APK 내장 기본값 사용 (일반 사용자는 만질 필요 없음)
             Card {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("백엔드 (Gemini 프록시)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "비워두면 기본 서버(${kr.wepick.leadapp.BuildConfig.DEFAULT_BACKEND_URL})를 사용합니다. 별도 서버를 쓸 때만 입력하세요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     OutlinedTextField(
                         value = urlInput,
                         onValueChange = { urlInput = it },
-                        label = { Text("API Base URL") },
-                        placeholder = { Text("https://lead-manager-app-wepick.vercel.app") },
+                        label = { Text("API Base URL (선택)") },
+                        placeholder = { Text("기본값 사용") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                         modifier = Modifier.fillMaxWidth(),

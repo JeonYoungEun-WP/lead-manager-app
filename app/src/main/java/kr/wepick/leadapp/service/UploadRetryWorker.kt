@@ -70,11 +70,7 @@ class UploadRetryWorker(
         }
 
         val prefs = applicationContext.appPreferences.data.first()
-        val backendUrl = prefs[KEY_BACKEND_URL]?.trim()?.trimEnd('/').orEmpty()
-        if (backendUrl.isBlank()) {
-            repo.markUploadFailed(callId, "백엔드 URL 미설정")
-            return Result.success()
-        }
+        val backendUrl = kr.wepick.leadapp.util.effectiveBackendUrl(prefs[KEY_BACKEND_URL])
         val agentName = prefs[KEY_AGENT_NAME]?.trim().orEmpty()
         val leadName = call.leadId?.let { repo.getLead(it)?.name }.orEmpty()
 

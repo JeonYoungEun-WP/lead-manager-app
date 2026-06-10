@@ -67,11 +67,7 @@ class AudioUploadWorker(
         repo.markAudioUploading(callId)
 
         val prefs = applicationContext.appPreferences.data.first()
-        val backendUrl = prefs[KEY_BACKEND_URL]?.trim()?.trimEnd('/').orEmpty()
-        if (backendUrl.isBlank()) {
-            repo.markAudioUploadFailed(callId, "백엔드 URL 미설정")
-            return Result.success()
-        }
+        val backendUrl = kr.wepick.leadapp.util.effectiveBackendUrl(prefs[KEY_BACKEND_URL])
 
         val http = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)

@@ -6,31 +6,41 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kr.wepick.leadapp.LeadApp
 import kr.wepick.leadapp.data.db.Lead
 import kr.wepick.leadapp.util.PhoneUtils
+import kr.wepick.leadapp.util.appPreferences
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LeadListScreen(
     onLeadClick: (Long) -> Unit,
     onAddClick: () -> Unit,
+    onGoSettings: () -> Unit = {},
 ) {
     val repo = remember { LeadApp.instance.leadRepo }
+    val context = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
     val flow: Flow<List<Lead>> = remember(query) {
         if (query.isBlank()) repo.observeLeads() else repo.searchLeads(query)
     }
     val leads by flow.collectAsState(initial = emptyList())
+    // 상담사 이름 미설정 감지 — 멀티유저 배포 시 이름 없이 업로드되면 어드민에서 'unknown' 으로 보임
+    val agentName by remember {
+        context.appPreferences.data.map { it[KEY_AGENT_NAME]?.trim().orEmpty() }
+    }.collectAsState(initial = null)
 
     Scaffold(
         topBar = {
@@ -50,6 +60,40 @@ fun LeadListScreen(
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            // 상담사 이름 미설정 배너 — null(로딩 중)일 땐 표시 안 함 (깜빡임 방지)
+            if (agentName != null && agentName!!.isBlank()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 12.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    onClick = onGoSettings,
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "상담사 이름을 설정해주세요",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            )
+                            Text(
+                                "이름이 없으면 관리자 화면에 'unknown' 으로 표시됩니다. 탭해서 설정으로 이동.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            )
+                        }
+                    }
+                }
+            }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },

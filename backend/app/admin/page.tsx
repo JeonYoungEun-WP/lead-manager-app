@@ -78,6 +78,9 @@ type AlertItem = {
 
 type Tab = "list" | "alerts";
 
+/** 통화 목록 그룹핑 기준 — 리드(고객)별 또는 상담사별. */
+type GroupMode = "lead" | "agent";
+
 function formatDate(ts: number): string {
   if (!ts) return "-";
   const d = new Date(ts);
@@ -102,6 +105,7 @@ export default function AdminPage() {
   const [filterAgent, setFilterAgent] = useState("");
   const [filterType, setFilterType] = useState<"" | CallType>("");
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [groupMode, setGroupMode] = useState<GroupMode>("lead");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [lastRefresh, setLastRefresh] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("list");
@@ -221,33 +225,43 @@ export default function AdminPage() {
     typeCounts[it.callType ?? "RECORDED"] += 1;
   }
 
-  // 리드별 그룹핑 — 같은 leadPhone 의 통화를 한 카드 아래 묶음.
+  // 그룹핑 — groupMode 에 따라 리드(leadPhone)별 또는 상담사(agentName)별로 묶음.
   type Group = {
     key: string;
-    leadName: string;
-    leadPhone: string;
+    /** 카드 헤더 타이틀 — 리드별이면 고객명, 상담사별이면 상담사명 */
+    title: string;
+    /** 카드 헤더 보조 — 리드별이면 전화번호, 상담사별이면 빈값 */
+    subtitle: string;
     items: TranscriptItem[];
     typeCounts: Record<CallType, number>;
     latestAt: number;
   };
   const groupMap = new Map<string, Group>();
   for (const it of list) {
-    const key = it.leadPhone || `noPhone:${it.id}`;
+    const key =
+      groupMode === "lead"
+        ? it.leadPhone || `noPhone:${it.id}`
+        : it.agentName || "(상담사 미지정)";
     const ct: CallType = it.callType ?? "RECORDED";
     let g = groupMap.get(key);
     if (!g) {
       g = {
         key,
-        leadName: it.leadName && it.leadName !== "-" ? it.leadName : "",
-        leadPhone: it.leadPhone,
+        title:
+          groupMode === "lead"
+            ? it.leadName && it.leadName !== "-" ? it.leadName : ""
+            : it.agentName || "(상담사 미지정)",
+        subtitle: groupMode === "lead" ? it.leadPhone : "",
         items: [],
         typeCounts: { RECORDED: 0, NO_ANSWER: 0, MISSED: 0, REJECTED: 0 },
         latestAt: 0,
       };
       groupMap.set(key, g);
     }
-    // 그룹에 더 신뢰성 있는 leadName 이 들어오면 채워둠
-    if (!g.leadName && it.leadName && it.leadName !== "-") g.leadName = it.leadName;
+    // 리드별 모드: 더 신뢰성 있는 leadName 이 들어오면 채워둠
+    if (groupMode === "lead" && !g.title && it.leadName && it.leadName !== "-") {
+      g.title = it.leadName;
+    }
     g.items.push(it);
     g.typeCounts[ct] += 1;
     if (it.startedAt > g.latestAt) g.latestAt = it.startedAt;
@@ -358,16 +372,38 @@ export default function AdminPage() {
         <section style={styles.listSection}>
           <div style={styles.listHeaderRow}>
             <h2 style={styles.h2}>
-              리드 {groups.length}명 · 통화 {list.length}건
+              {groupMode === "lead" ? "리드" : "상담사"} {groups.length}명 · 통화 {list.length}건
               {filterAgent && (items ?? []).length !== list.length
                 ? ` (필터 적용 / 전체 ${(items ?? []).length})`
                 : ""}
             </h2>
-            {groups.length > 0 && (
-              <button onClick={toggleAll} style={styles.btnGhost}>
-                {allExpanded ? "모두 접기" : "모두 펼치기"}
-              </button>
-            )}
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={styles.segmented}>
+                <button
+                  onClick={() => { setGroupMode("lead"); setExpandedGroups(new Set()); }}
+                  style={{
+                    ...styles.segmentedBtn,
+                    ...(groupMode === "lead" ? styles.segmentedBtnActive : null),
+                  }}
+                >
+                  리드별
+                </button>
+                <button
+                  onClick={() => { setGroupMode("agent"); setExpandedGroups(new Set()); }}
+                  style={{
+                    ...styles.segmentedBtn,
+                    ...(groupMode === "agent" ? styles.segmentedBtnActive : null),
+                  }}
+                >
+                  상담사별
+                </button>
+              </div>
+              {groups.length > 0 && (
+                <button onClick={toggleAll} style={styles.btnGhost}>
+                  {allExpanded ? "모두 접기" : "모두 펼치기"}
+                </button>
+              )}
+            </div>
           </div>
           {items === null ? (
             <p style={styles.empty}>불러오는 중…</p>
@@ -387,8 +423,10 @@ export default function AdminPage() {
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={styles.groupTitleRow}>
-                            <strong>{g.leadName || "(이름 없음)"}</strong>
-                            <span style={styles.listItemPhone}>{formatPhone(g.leadPhone)}</span>
+                            <strong>{g.title || "(이름 없음)"}</strong>
+                            {g.subtitle && (
+                              <span style={styles.listItemPhone}>{formatPhone(g.subtitle)}</span>
+                            )}
                           </div>
                           <div style={styles.groupMetaRow}>
                             <span>{g.items.length}건</span>
@@ -454,7 +492,15 @@ export default function AdminPage() {
                                   )}
                                 </div>
                                 <div style={styles.listItemMeta}>
-                                  상담사 {agent}
+                                  {groupMode === "lead" ? (
+                                    <>상담사 {agent}</>
+                                  ) : (
+                                    <>
+                                      {it.leadName && it.leadName !== "-" ? it.leadName : "(이름 없음)"}
+                                      {" · "}
+                                      {formatPhone(it.leadPhone)}
+                                    </>
+                                  )}
                                   {it.durationSec != null && it.durationSec > 0 && (
                                     <> · {formatDuration(it.durationSec)}</>
                                   )}
@@ -966,5 +1012,24 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 6,
     cursor: "pointer",
     fontSize: 13,
+  },
+  segmented: {
+    display: "inline-flex",
+    border: "1px solid #cbd5e1",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  segmentedBtn: {
+    padding: "6px 14px",
+    border: "none",
+    background: "white",
+    color: "#64748b",
+    cursor: "pointer",
+    fontSize: 13,
+  },
+  segmentedBtnActive: {
+    background: "#2563eb",
+    color: "white",
+    fontWeight: 600,
   },
 };

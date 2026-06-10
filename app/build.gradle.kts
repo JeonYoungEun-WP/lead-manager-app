@@ -11,6 +11,16 @@ val localProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 val sharedAppToken: String = localProps.getProperty("app.sharedToken", "")
+// 운영 백엔드 URL — APK 에 기본값 내장. 설정 화면에서 입력하면 그쪽이 우선.
+val defaultBackendUrl: String =
+    localProps.getProperty("app.defaultBackendUrl", "https://lead-manager-app-wepick.vercel.app")
+
+// Release 서명 — local.properties 에서 읽음 (없으면 release 빌드 시 unsigned)
+val ksPath: String = localProps.getProperty("keystore.path", "")
+val ksPassword: String = localProps.getProperty("keystore.password", "")
+val ksKeyAlias: String = localProps.getProperty("key.alias", "")
+val ksKeyPassword: String = localProps.getProperty("key.password", "")
+val hasReleaseSigning = ksPath.isNotBlank() && file(ksPath).exists()
 
 android {
     namespace = "kr.wepick.leadapp"
@@ -35,6 +45,18 @@ android {
         }
 
         buildConfigField("String", "APP_TOKEN", "\"$sharedAppToken\"")
+        buildConfigField("String", "DEFAULT_BACKEND_URL", "\"$defaultBackendUrl\"")
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(ksPath)
+                storePassword = ksPassword
+                keyAlias = ksKeyAlias
+                keyPassword = ksKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -44,6 +66,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
