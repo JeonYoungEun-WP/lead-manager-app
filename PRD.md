@@ -144,7 +144,7 @@
 
 | 값 | 분류 기준 (Android CallLog) | 처리 경로 | UI 라벨 (앱/어드민 공통) |
 |---|---|---|---|
-| `RECORDED` | OUTGOING + duration>0 / INCOMING + 녹음 존재 | RTZR 전사 → Claude 요약 → 업로드 | 파랑 "녹음" |
+| `RECORDED` | OUTGOING + duration>0 / INCOMING + 녹음 존재 | RTZR 전사 → Claude 요약 → 업로드 | 파랑 "통화성공" |
 | `NO_ANSWER` | OUTGOING + duration=0 **또는** 녹음 전사가 음성사서함 안내멘트로 후판정 | 즉시 업로드 (전사 스킵) | 회색 "부재중" (고객이 안 받음) |
 | `MISSED` | MISSED_TYPE | 즉시 업로드 | 주황 "놓친 전화" (상담사가 못 받음) |
 | `REJECTED` | REJECTED_TYPE (수신 거절) | 즉시 업로드 | 빨강 "거절" |

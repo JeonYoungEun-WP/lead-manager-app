@@ -39,9 +39,9 @@ type TranscriptDetail = {
   audioUrl?: string | null;
 };
 
-// 라벨 규약: 부재중(고객이 안 받음, 발신) / 놓친 전화(상담사가 못 받음, 수신) / 거절 / 녹음
+// 라벨 규약: 통화성공(정상 통화) / 부재중(고객이 안 받음, 발신) / 놓친 전화(상담사가 못 받음, 수신) / 거절
 const CALL_TYPE_LABEL: Record<CallType, string> = {
-  RECORDED: "녹음",
+  RECORDED: "통화성공",
   NO_ANSWER: "부재중",
   MISSED: "놓친 전화",
   REJECTED: "거절",
@@ -318,7 +318,7 @@ export default function AdminPage() {
             style={styles.select}
           >
             <option value="">통화 유형 전체</option>
-            <option value="RECORDED">녹음 ({typeCounts.RECORDED})</option>
+            <option value="RECORDED">통화성공 ({typeCounts.RECORDED})</option>
             <option value="NO_ANSWER">부재중 ({typeCounts.NO_ANSWER})</option>
             <option value="MISSED">놓친 전화 ({typeCounts.MISSED})</option>
             <option value="REJECTED">거절 ({typeCounts.REJECTED})</option>
