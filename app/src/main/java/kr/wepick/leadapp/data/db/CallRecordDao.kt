@@ -79,6 +79,16 @@ interface CallRecordDao {
     suspend fun updateDuration(id: Long, durationSec: Int)
 
     /**
+     * RECORDED 로 잘못 분류된 음성사서함/자동응답 녹음을 미응답으로 정정.
+     * SttWorker 가 전사문 후판정으로 호출. 안내멘트 전사/요약은 의미 없으므로 비운다.
+     */
+    @Query(
+        "UPDATE call_records SET callType = 'NO_ANSWER', status = 'NO_TRANSCRIPT', " +
+        "transcript = NULL, summary = NULL WHERE id = :id"
+    )
+    suspend fun convertToVoicemailNoAnswer(id: Long)
+
+    /**
      * 가장 최근 AWAITING_FILE 스텁 — 통화 종료 직후 검증 워커가 사용.
      * since 이후 만들어진 stub 만 봄 (오래된 것은 이미 다른 경로로 처리됨).
      */

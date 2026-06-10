@@ -75,11 +75,29 @@ class SttWorker(
                 val transcript = pollUntilDone(rtzr, rtzrId)
                     ?: throw IOException("RTZR 전사 타임아웃")
 
-                val summary = runCatching {
+                // 음성사서함 후판정 1차 (키워드) — 상대가 안 받아 소리샘으로 넘어간
+                // 통화는 OS가 정상 녹음으로 기록하지만 실제로는 미응답이다.
+                if (kr.wepick.leadapp.util.VoicemailDetector.isVoicemail(transcript)) {
+                    Log.i(TAG, "callId=${call.id} 음성사서함 감지(키워드) → NO_ANSWER 전환")
+                    repo.convertToVoicemailNoAnswer(call.id)
+                    UploadRetryWorker.enqueueImmediate(applicationContext, call.id)
+                    continue
+                }
+
+                val summaryResult = runCatching {
                     withContext(Dispatchers.IO) {
                         fetchSummary(http, backendUrl, transcript, call.phone)
                     }
-                }.getOrDefault("")
+                }.getOrDefault(SummaryResult("", voicemail = false))
+
+                // 음성사서함 후판정 2차 (Claude) — 키워드에 안 걸린 변형 안내멘트 보강.
+                if (summaryResult.voicemail) {
+                    Log.i(TAG, "callId=${call.id} 음성사서함 감지(Claude) → NO_ANSWER 전환")
+                    repo.convertToVoicemailNoAnswer(call.id)
+                    UploadRetryWorker.enqueueImmediate(applicationContext, call.id)
+                    continue
+                }
+                val summary = summaryResult.text
 
                 repo.setCallResult(call.id, transcript, summary)
 
@@ -202,12 +220,16 @@ class SttWorker(
         }
     }
 
+    /** 요약 텍스트 + 백엔드(Claude)의 음성사서함 판정. */
+    data class SummaryResult(val text: String, val voicemail: Boolean)
+
     private fun fetchSummary(
         http: OkHttpClient,
         backendUrl: String,
         transcript: String,
         phone: String,
-    ): String {
+    ): SummaryResult {
+        val empty = SummaryResult("", voicemail = false)
         val body = JSONObject()
             .put("transcript", transcript)
             .put("phone", phone)
@@ -219,10 +241,11 @@ class SttWorker(
             .build()
         http.newCall(req).execute().use { res ->
             val text = res.body?.string().orEmpty()
-            if (!res.isSuccessful) return ""
-            val lastLine = text.trim().lines().lastOrNull { it.isNotBlank() } ?: return ""
+            if (!res.isSuccessful) return empty
+            val lastLine = text.trim().lines().lastOrNull { it.isNotBlank() } ?: return empty
             val json = JSONObject(lastLine)
-            if (!json.has("summary")) return ""
+            if (!json.has("summary")) return empty
+            val voicemail = json.optBoolean("voicemail", false)
             val summary = json.getJSONArray("summary")
             val sb = StringBuilder()
             for (i in 0 until summary.length()) {
@@ -242,7 +265,7 @@ class SttWorker(
                     }
                 }
             }
-            return sb.toString().trim()
+            return SummaryResult(sb.toString().trim(), voicemail)
         }
     }
 }

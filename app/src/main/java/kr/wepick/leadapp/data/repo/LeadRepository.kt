@@ -128,6 +128,10 @@ class LeadRepository(
     suspend fun updateStubDuration(id: Long, durationSec: Int) =
         callRecordDao.updateDuration(id, durationSec)
 
+    /** 음성사서함/자동응답 녹음으로 후판정된 RECORDED → NO_ANSWER 정정 (SttWorker). */
+    suspend fun convertToVoicemailNoAnswer(id: Long) =
+        callRecordDao.convertToVoicemailNoAnswer(id)
+
     /** 통화 종료 즉시 검증할 가장 최근 AWAITING_FILE stub. */
     suspend fun findMostRecentAwaitingStub(sinceMs: Long): CallRecord? =
         callRecordDao.findMostRecentAwaitingStub(sinceMs)
