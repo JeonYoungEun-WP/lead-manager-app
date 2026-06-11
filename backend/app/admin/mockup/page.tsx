@@ -1,531 +1,585 @@
 "use client";
 
 /**
- * /admin/mockup — 리드 관리 페이지 디자인 목업 (가상 데이터).
+ * /admin/mockup — 부스터맥스(BoosterMAX) 잠재고객 페이지 통합 시안 (가상 데이터).
  *
- * 실제 CRM(맥스) 통합 시안: 리드 테이블 + 선택 리드 상세 패널에
- * 통화 요약·핵심 포인트·전문 보기·녹음 다운로드를 어떻게 배치할지 제안.
- * 운영 데이터와 무관하며 모든 수치는 예시.
+ * 실제 부스터맥스 화면(잠재고객 목록 + 고객 상세 모달)을 본떠서,
+ * 부스터리드 앱이 자동 업로드하는 통화 기록을 상담이력에 어떻게
+ * 통합할지 보여주는 디자인 목업:
+ *   - 상담이력에 AI 통화 기록 자동 추가 (통화성공/부재중 배지)
+ *   - AI 요약 5줄 + 핵심 포인트 + [전문 보기] + [🎧 녹음 다운로드]
+ *   - 상담 녹취록 필드: 앱 자동 업로드 표시
+ *   - 재연락 자동 감지 → 상태값/상담일시 자동 제안
  */
 
 import type { CSSProperties } from "react";
 import { useState } from "react";
 
-type CallType = "RECORDED" | "NO_ANSWER" | "MISSED" | "REJECTED";
-
-const CALL_TYPE_LABEL: Record<CallType, string> = {
-  RECORDED: "통화성공",
-  NO_ANSWER: "부재중",
-  MISSED: "놓친 전화",
-  REJECTED: "거절",
-};
-
-const CALL_TYPE_COLOR: Record<CallType, { bg: string; fg: string }> = {
-  RECORDED: { bg: "#e0f2fe", fg: "#075985" },
-  NO_ANSWER: { bg: "#f1f5f9", fg: "#475569" },
-  MISSED: { bg: "#fed7aa", fg: "#9a3412" },
-  REJECTED: { bg: "#fecaca", fg: "#991b1b" },
-};
-
 // ── 가상 데이터 ─────────────────────────────────────────
 
-type MockCall = {
-  id: number;
-  at: string;
-  type: CallType;
-  durationSec: number | null;
-  agent: string;
-  hasAudio: boolean;
-  summary?: string[];
-  keyPoints?: { title: string; detail: string }[];
-  transcript?: string;
-  callbackAt?: string;
-};
+type HistoryEntry =
+  | {
+      kind: "ai-call";
+      id: number;
+      badge: "통화성공" | "부재중";
+      at: string;
+      durationSec: number | null;
+      agent: string;
+      hasAudio: boolean;
+      summary?: string[];
+      keyPoints?: { title: string; detail: string }[];
+      transcript?: string;
+    }
+  | {
+      kind: "manual";
+      id: number;
+      badge: string;
+      at: string;
+      lines: string[];
+    };
 
-type MockLead = {
-  id: number;
-  name: string;
-  phone: string;
-  grade: "A" | "B" | "C";
-  status: string;
-  agent: string;
-  tags: string[];
-  callbackAt?: string;
-  calls: MockCall[];
-};
-
-const LEADS: MockLead[] = [
+const HISTORY: HistoryEntry[] = [
   {
+    kind: "ai-call",
     id: 1,
-    name: "김민준",
-    phone: "010-1234-5678",
-    grade: "A",
-    status: "상담 진행중",
-    agent: "박상담",
-    tags: ["영어회화", "주2회", "재연락"],
-    callbackAt: "2026-06-12 14:00",
-    calls: [
-      {
-        id: 11,
-        at: "2026-06-10 15:42",
-        type: "RECORDED",
-        durationSec: 312,
-        agent: "박상담",
-        hasAudio: true,
-        callbackAt: "2026-06-12 14:00",
-        summary: [
-          "[#재연락 2026-06-12T14:00] 목요일 오후 2시 재연락 약속",
-          "주 2회 영어회화 수업 가격(월 30만원) 안내",
-          "수강 시간대는 평일 저녁 7시 이후 희망",
-          "배우자와 상의 후 결정하겠다고 함",
-          "타사(B어학원) 견적과 비교 중 — 가격 민감",
-        ],
-        keyPoints: [
-          { title: "재연락 약속", detail: "6/12(목) 14:00 — 배우자 상의 후 결정" },
-          { title: "가격 민감", detail: "B어학원 월 25만원 견적과 비교 중" },
-          { title: "시간 제약", detail: "평일 저녁 7시 이후만 가능" },
-        ],
-        transcript:
-          "상담사: 안녕하세요 김민준 고객님, 부스터 영어 박상담입니다. 지난번 문의주신 영어회화 수업 관련해서 연락드렸습니다.\n\n고객: 네 안녕하세요. 마침 궁금한 게 있었어요. 주 2회 수업이면 한 달에 얼마인가요?\n\n상담사: 주 2회 기준 월 30만원이고요, 첫 달은 레벨테스트 포함입니다.\n\n고객: 음… 다른 데는 25만원이던데요. B어학원이요.\n\n상담사: 저희는 원어민 1:1 수업이라 그룹 수업과는 차이가 있습니다. 평일 저녁 시간대도 가능하고요.\n\n고객: 저녁 7시 이후만 되는데 가능한가요?\n\n상담사: 네, 7시·8시 타임 모두 열려 있습니다.\n\n고객: 알겠습니다. 아내랑 상의해보고 목요일 오후 2시쯤 다시 전화 주실 수 있나요?\n\n상담사: 네, 목요일 오후 2시에 다시 연락드리겠습니다. 감사합니다.",
-      },
-      { id: 12, at: "2026-06-09 11:20", type: "NO_ANSWER", durationSec: null, agent: "박상담", hasAudio: false },
-      { id: 13, at: "2026-06-08 16:05", type: "MISSED", durationSec: null, agent: "박상담", hasAudio: false },
+    badge: "통화성공",
+    at: "2026.06.10 14:26",
+    durationSec: 312,
+    agent: "전영은",
+    hasAudio: true,
+    summary: [
+      "[#재연락 2026-06-11T16:30] 내일 오후 4시 반 재연락 약속",
+      "랜딩페이지 제작 패키지 가격(월 49만원) 안내",
+      "현재 타사 빌더 사용 중 — 이전 비용 문의",
+      "구글시트 연동 기능에 높은 관심 보임",
+      "결정권자(대표) 보고 후 회신 예정",
     ],
+    keyPoints: [
+      { title: "재연락 약속", detail: "6/11(목) 16:30 — 대표 보고 후" },
+      { title: "이전 비용", detail: "타사 빌더 → 부스터맥스 마이그레이션 문의" },
+      { title: "관심 기능", detail: "구글시트 리드 연동" },
+    ],
+    transcript:
+      "상담사: 안녕하세요 황순님, 상용워크플레이스 전영은입니다. 랜딩페이지 문의주셔서 연락드렸습니다.\n\n고객: 네 안녕하세요. 지금 다른 빌더를 쓰고 있는데 옮기려면 비용이 어떻게 되나요?\n\n상담사: 제작 패키지가 월 49만원이고, 기존 페이지 이전은 무료로 도와드립니다.\n\n고객: 구글시트로 리드 받는 것도 되나요? 그게 제일 중요해서요.\n\n상담사: 네, 구글시트 연동은 기본 제공입니다. 유입되는 즉시 시트에 쌓입니다.\n\n고객: 좋네요. 대표님께 보고하고 내일 오후 4시 반쯤 다시 통화 가능할까요?\n\n상담사: 네, 내일 16시 30분에 다시 연락드리겠습니다. 감사합니다.",
   },
   {
+    kind: "manual",
     id: 2,
-    name: "이서연",
-    phone: "010-9876-5432",
-    grade: "B",
-    status: "신규",
-    agent: "최영업",
-    tags: ["수학", "고2"],
-    calls: [
-      {
-        id: 21,
-        at: "2026-06-10 10:15",
-        type: "RECORDED",
-        durationSec: 187,
-        agent: "최영업",
-        hasAudio: true,
-        summary: [
-          "고2 자녀 수학 내신 대비 문의",
-          "현재 3등급 — 여름방학 집중반 관심",
-          "주말반 가능 여부 문의함",
-          "학부모 설명회(6/15) 초대 안내",
-          "설명회 참석 후 등록 여부 결정 예정",
-        ],
-        keyPoints: [
-          { title: "설명회 초대", detail: "6/15(일) 학부모 설명회 참석 예정" },
-          { title: "주말반 희망", detail: "토요일 오전 선호" },
-        ],
-        transcript:
-          "상담사: 안녕하세요, 이서연 학부모님 맞으실까요?\n\n고객: 네 맞아요.\n\n상담사: 고2 자녀분 수학 문의주셨죠. 현재 등급이 어떻게 되나요?\n\n고객: 3등급이에요. 여름방학 때 바짝 올리고 싶어서요…",
-      },
-    ],
+    badge: "재연락",
+    at: "2026.06.10 14:26",
+    lines: ["연락대기 → 재연락", "상담사: 전영은", "📅 상담일시: 2026.06.11 16:30"],
   },
   {
+    kind: "ai-call",
     id: 3,
-    name: "정도현",
-    phone: "010-5555-2222",
-    grade: "C",
-    status: "장기 미응답",
-    agent: "박상담",
-    tags: ["코딩", "초등"],
-    calls: [
-      { id: 31, at: "2026-06-07 14:30", type: "NO_ANSWER", durationSec: null, agent: "박상담", hasAudio: false },
-      { id: 32, at: "2026-06-05 10:00", type: "NO_ANSWER", durationSec: null, agent: "박상담", hasAudio: false },
-      { id: 33, at: "2026-06-03 16:45", type: "REJECTED", durationSec: null, agent: "박상담", hasAudio: false },
-    ],
+    badge: "부재중",
+    at: "2026.06.09 11:20",
+    durationSec: null,
+    agent: "전영은",
+    hasAudio: false,
+  },
+  {
+    kind: "manual",
+    id: 4,
+    badge: "연락대기",
+    at: "2026.05.20 17:47",
+    lines: ["리드유입"],
   },
 ];
 
-// ── 컴포넌트 ────────────────────────────────────────────
+const ROWS = [
+  { no: 277, at: "2026.05.20 17:47", svc: "구글연동", route: "구글시트", proj: "-", page: "-", name: "황순6", phone: "010-5113-1116", status: "재연락", agent: "이유림", touch: 1 },
+  { no: 276, at: "2026.05.20 17:42", svc: "BoosterMAX", route: "폼 제출", proj: "상용워크플레이스", page: "핑크", name: "미장센", phone: "010-5291-1944", status: "연락대기", agent: "전영은", touch: 0 },
+  { no: 275, at: "2026.05.20 17:19", svc: "구글연동", route: "구글시트", proj: "-", page: "-", name: "황순5", phone: "010-5113-1115", status: "연락대기", agent: "이유림", touch: 0 },
+  { no: 274, at: "2026.05.20 14:42", svc: "BoosterMAX", route: "폼 제출", proj: "상용워크플레이스", page: "핑크", name: "에스파", phone: "010-5291-1948", status: "연락대기", agent: "이유림", touch: 0 },
+  { no: 273, at: "2026.05.14 17:03", svc: "엑셀", route: "엑셀", proj: "상용워크플레이스", page: "핑크", name: "네번째", phone: "010-5558-6857", status: "연락대기", agent: "이유림", touch: 0 },
+];
 
-function fmtDuration(sec: number | null): string {
-  if (sec == null) return "-";
+const STATS: [string, number][] = [
+  ["전체", 277], ["연락대기", 275], ["부재중", 1], ["반려", 0], ["기타", 0],
+  ["재연락", 1], ["예약성공", 0], ["예약실패", 0], ["방문성공", 0],
+  ["방문취소", 0], ["결제성공", 0], ["결제실패", 0], ["블랙리스트", 0],
+];
+
+function fmtDur(sec: number | null): string {
+  if (sec == null) return "";
   return `${Math.floor(sec / 60)}분 ${String(sec % 60).padStart(2, "0")}초`;
 }
 
-function TypeBadge({ t }: { t: CallType }) {
-  const c = CALL_TYPE_COLOR[t];
-  return (
-    <span style={{ ...S.badge, background: c.bg, color: c.fg }}>
-      {CALL_TYPE_LABEL[t]}
-    </span>
-  );
-}
+// ── 페이지 ──────────────────────────────────────────────
 
-export default function LeadMockupPage() {
-  const [selectedId, setSelectedId] = useState<number>(1);
+export default function BoosterMaxMockup() {
+  const [modalOpen, setModalOpen] = useState(true);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
-  const lead = LEADS.find((l) => l.id === selectedId)!;
-  const lastRecorded = lead.calls.find((c) => c.type === "RECORDED");
+  const aiCall = HISTORY[0] as Extract<HistoryEntry, { kind: "ai-call" }>;
 
   return (
     <div style={S.shell}>
-      {/* ── 사이드바 ── */}
+      {/* ── 사이드바 (부스터맥스 스타일) ── */}
       <aside style={S.sidebar}>
-        <div style={S.logo}>부스터맥스</div>
+        <div style={S.ws}>
+          <div style={S.wsIcon}>B</div>
+          <div>
+            <div style={S.wsName}>상용워크플레이스</div>
+            <div style={S.wsMail}>youngeun@wepick.kr</div>
+          </div>
+        </div>
         <nav style={S.nav}>
-          {["대시보드", "리드 관리", "통화 기록", "알림", "통계", "설정"].map((m, i) => (
-            <div key={m} style={{ ...S.navItem, ...(i === 1 ? S.navItemActive : null) }}>
-              {m}
-            </div>
-          ))}
+          <div style={S.navItem}>▦ 대시보드</div>
+          <div style={S.navItem}>◇ 랜딩빌더</div>
+          <div style={S.navSub}>브랜드</div>
+          <div style={S.navSub}>프로젝트</div>
+          <div style={S.navSub}>랜딩빌더</div>
+          <div style={S.navItem}>👥 잠재고객</div>
+          <div style={{ ...S.navSub, ...S.navActive }}>잠재고객</div>
+          <div style={S.navItem}>📈 성과관리</div>
+          <div style={S.navSub}>랜딩페이지 성과</div>
+          <div style={S.navSub}>상담성과</div>
+          <div style={S.navItem}>⚙ 설정</div>
         </nav>
         <div style={S.mockTag}>DESIGN MOCKUP — 가상 데이터</div>
+        <div style={S.brand}>booster<strong>MAX</strong></div>
       </aside>
 
-      <div style={S.main}>
-        {/* ── 상단 바 ── */}
-        <header style={S.topbar}>
-          <h1 style={S.title}>리드 관리</h1>
-          <input style={S.search} placeholder="이름·번호·태그 검색" readOnly />
-          <div style={S.user}>전영은 ▾</div>
-        </header>
+      {/* ── 메인: 잠재고객 목록 ── */}
+      <main style={S.main}>
+        <div style={S.pageHead}>
+          <div>
+            <h1 style={S.h1}>잠재고객 ⓘ</h1>
+            <div style={S.subtitle}>리드를 확인하고 관리해요.</div>
+          </div>
+          <button style={S.btnOutline}>🚫 블랙리스트 관리</button>
+        </div>
 
-        <div style={S.content}>
-          {/* ── 리드 테이블 ── */}
-          <section style={S.tableWrap}>
-            <div style={S.tableHeader}>
-              <span>리드 {LEADS.length}명</span>
-              <button style={S.btnPrimary}>+ 리드 추가</button>
-            </div>
-            <table style={S.table}>
-              <thead>
-                <tr>
-                  {["이름", "연락처", "등급", "상태", "담당", "최근 통화", "재연락"].map((h) => (
-                    <th key={h} style={S.th}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {LEADS.map((l) => {
-                  const last = l.calls[0];
-                  return (
-                    <tr
-                      key={l.id}
-                      onClick={() => { setSelectedId(l.id); setTranscriptOpen(false); }}
-                      style={{ ...S.tr, ...(l.id === selectedId ? S.trActive : null) }}
-                    >
-                      <td style={{ ...S.td, fontWeight: 600 }}>{l.name}</td>
-                      <td style={S.td}>{l.phone}</td>
-                      <td style={S.td}>
-                        <span style={{ ...S.grade, ...S[`grade${l.grade}` as keyof typeof S] as CSSProperties }}>
-                          {l.grade}
-                        </span>
-                      </td>
-                      <td style={S.td}>{l.status}</td>
-                      <td style={S.td}>{l.agent}</td>
-                      <td style={S.td}>{last ? <TypeBadge t={last.type} /> : "-"}</td>
-                      <td style={{ ...S.td, color: l.callbackAt ? "#b45309" : "#94a3b8" }}>
-                        {l.callbackAt ? `🔔 ${l.callbackAt}` : "-"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </section>
+        <div style={S.tabs}>
+          {["전체", "BoosterMAX", "구글연동", "엑셀", "+ 외부연동"].map((t, i) => (
+            <span key={t} style={{ ...S.tab, ...(i === 0 ? S.tabActive : null) }}>{t}</span>
+          ))}
+        </div>
 
-          {/* ── 리드 상세 패널 ── */}
-          <section style={S.detail}>
-            {/* 고객 카드 */}
-            <div style={S.card}>
-              <div style={S.leadHeader}>
-                <div>
-                  <div style={S.leadName}>
-                    {lead.name}
-                    <span style={{ ...S.grade, ...S[`grade${lead.grade}` as keyof typeof S] as CSSProperties, marginLeft: 8 }}>
-                      {lead.grade}등급
-                    </span>
-                  </div>
-                  <div style={S.leadPhone}>{lead.phone} · 담당 {lead.agent}</div>
-                  <div style={S.tags}>
-                    {lead.tags.map((t) => <span key={t} style={S.tag}>#{t}</span>)}
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button style={S.btnPrimary}>📞 전화</button>
-                  <button style={S.btnGhostBorder}>💬 SMS</button>
-                </div>
+        {/* 상태 통계 */}
+        <div style={S.stats}>
+          {STATS.map(([k, v]) => (
+            <div key={k} style={S.stat}>
+              <div style={S.statLabel}>{k}</div>
+              <div style={{ ...S.statValue, ...(k === "전체" ? { color: "#2563eb" } : v > 0 && k !== "연락대기" ? { color: "#0f172a" } : null) }}>
+                {v}
               </div>
-              {lead.callbackAt && (
-                <div style={S.callbackBanner}>
-                  🔔 재연락 예정 — <strong>{lead.callbackAt}</strong> (통화 요약에서 자동 감지됨)
-                </div>
-              )}
+            </div>
+          ))}
+        </div>
+
+        {/* 고객목록 테이블 */}
+        <div style={S.tableCard}>
+          <table style={S.table}>
+            <thead>
+              <tr>
+                {["번호", "유입일시", "서비스명", "유입경로", "프로젝트명/브랜드명", "고객정보", "상태", "콜상담사", "콜터치수", "최근 통화"].map((h) => (
+                  <th key={h} style={S.th}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ROWS.map((r, i) => (
+                <tr
+                  key={r.no}
+                  style={{ ...S.tr, ...(i === 0 ? S.trActive : null) }}
+                  onClick={() => i === 0 && setModalOpen(true)}
+                >
+                  <td style={S.td}>{r.no}</td>
+                  <td style={S.td}>{r.at}</td>
+                  <td style={S.td}>{r.svc}</td>
+                  <td style={S.td}><span style={S.routeChip}>{r.route}</span></td>
+                  <td style={S.td}>{r.proj}</td>
+                  <td style={S.td}>
+                    <div style={{ fontWeight: 600 }}>{r.name}</div>
+                    <div style={{ color: "#94a3b8", fontSize: 12 }}>{r.phone}</div>
+                  </td>
+                  <td style={S.td}>
+                    <span style={r.status === "재연락" ? S.chipBlue : S.chipGray}>{r.status}</span>
+                  </td>
+                  <td style={S.td}>{r.agent} ▾</td>
+                  <td style={{ ...S.td, textAlign: "center" }}>{r.touch}</td>
+                  <td style={S.td}>
+                    {i === 0 ? (
+                      <span style={S.aiChip}>✨ 통화성공 · 요약 있음</span>
+                    ) : (
+                      <span style={{ color: "#cbd5e1" }}>-</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={S.tableHint}>※ 첫 행(황순6)을 클릭하면 통화 기록이 통합된 고객 상세를 볼 수 있습니다.</div>
+        </div>
+      </main>
+
+      {/* ── 고객 상세 모달 (3컬럼 — 부스터맥스 레이아웃) ── */}
+      {modalOpen && (
+        <div style={S.overlay}>
+          <div style={S.modal}>
+            {/* 모달 헤더 */}
+            <div style={S.modalHead}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <strong style={{ fontSize: 18 }}>황순6</strong>
+                <span style={S.chipBlue}>재연락</span>
+              </div>
+              <div style={{ display: "flex", gap: 14, color: "#94a3b8" }}>
+                <span>‹</span><span>›</span>
+                <span style={{ cursor: "pointer" }} onClick={() => setModalOpen(false)}>✕</span>
+              </div>
             </div>
 
-            {/* 최근 통화 — AI 요약 */}
-            {lastRecorded ? (
-              <div style={S.card}>
-                <div style={S.callHeader}>
-                  <div>
-                    <span style={S.sectionTitle}>최근 통화</span>
-                    <span style={S.callMeta}>
-                      {lastRecorded.at} · {fmtDuration(lastRecorded.durationSec)} · 상담사 {lastRecorded.agent}
-                    </span>
+            <div style={S.cols}>
+              {/* ① 고객 정보 */}
+              <section style={S.col1}>
+                <div style={S.colTitle}>👤 고객 정보 <span style={S.lpChip}>랜딩페이지</span></div>
+                <div style={S.custCard}>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>황순6</div>
+                  <div style={{ color: "#475569", marginTop: 4 }}>📞 010-5113-1116</div>
+                </div>
+                <div style={S.infoBlock}>
+                  <div style={S.infoTitle}>ⓘ 유입 정보</div>
+                  {[["브랜드", "-"], ["프로젝트", "-"], ["랜딩페이지", "-"], ["신청일", "2026.05.20 17:47"]].map(([k, v]) => (
+                    <div key={k} style={S.infoRow}><span style={S.infoKey}>{k}</span><span>{v}</span></div>
+                  ))}
+                </div>
+                <div style={S.infoBlock}>
+                  <div style={S.infoTitle}>📝 폼 입력값</div>
+                  <div style={{ color: "#94a3b8", fontSize: 13 }}>입력값 없음</div>
+                </div>
+                <div style={S.infoBlock}>
+                  <div style={S.infoTitle}>✓ 동의 현황</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {["개인정보", "제3자제공", "마케팅"].map((t) => <span key={t} style={S.chipGray}>{t}</span>)}
                   </div>
-                  <TypeBadge t={lastRecorded.type} />
+                </div>
+              </section>
+
+              {/* ② 상담 작성 */}
+              <section style={S.col2}>
+                <div style={S.colTitle}>📋 상담 작성</div>
+                <button style={S.callBtn}>📞 콜상담</button>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "16px 0 10px" }}>
+                  <strong style={{ fontSize: 14 }}>| 콜상담 작성</strong>
+                  <span style={S.chipBlue}>재연락</span>
                 </div>
 
-                <div style={S.summaryBox}>
-                  <div style={S.summaryLabel}>✨ AI 통화 요약</div>
-                  <ol style={S.summaryList}>
-                    {lastRecorded.summary!.map((s, i) => (
-                      <li key={i} style={{ ...S.summaryLine, ...(s.startsWith("[#재연락") ? S.summaryCallback : null) }}>
-                        {s}
-                      </li>
-                    ))}
-                  </ol>
+                <div style={S.formRow}>
+                  <span style={S.formKey}>상태값</span>
+                  <div style={S.select}>재연락 ▾</div>
+                </div>
+                {/* ✨ 통합 포인트: 통화 요약이 상담내용에 자동 채워짐 */}
+                <div style={S.formRow}>
+                  <span style={S.formKey}>상담내용</span>
+                  <div style={S.textareaFilled}>
+                    <div style={S.autoFillTag}>✨ 통화 요약에서 자동 입력됨 — 수정 가능</div>
+                    랜딩페이지 제작 패키지(월 49만원) 안내. 타사 빌더에서 이전 희망,
+                    구글시트 연동에 관심. 대표 보고 후 6/11(목) 16:30 재연락 약속.
+                  </div>
+                </div>
+                <div style={S.formRow}>
+                  <span style={S.formKey}>상담일시</span>
+                  <div style={S.select}>
+                    2026-06-11 16:30 <span style={S.autoMini}>✨ 재연락 마커 자동 감지</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", margin: "12px 0 18px" }}>
+                  <button style={S.saveBtn}>저장</button>
                 </div>
 
-                <div style={S.keyPoints}>
-                  {lastRecorded.keyPoints!.map((k) => (
-                    <div key={k.title} style={S.keyPoint}>
-                      <div style={S.keyPointTitle}>{k.title}</div>
-                      <div style={S.keyPointDetail}>{k.detail}</div>
+                {/* ✨ 통합 포인트: 녹취록 자동 업로드 */}
+                <div style={S.formRow}>
+                  <span style={S.formKey}>상담 녹취록</span>
+                  <div style={S.audioBox}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span>🎧</span>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>통화녹음_황순6_20260610.m4a</div>
+                        <div style={{ color: "#16a34a", fontSize: 12 }}>✓ 부스터리드 앱에서 자동 업로드됨 · 5분 12초</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                      <button style={S.btnSmall} onClick={(e) => e.preventDefault()}>⬇ 다운로드</button>
+                      <button style={S.btnSmallGhost}>파일 선택 (MP3, WAV, M4A)</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* ③ 상담이력 — AI 통화 기록 통합 */}
+              <section style={S.col3}>
+                <div style={S.colTitle}>
+                  🕘 상담이력 <span style={S.countChip}>{HISTORY.length}건</span>
+                </div>
+                <div style={S.history}>
+                  {HISTORY.map((h) => (
+                    <div key={h.id} style={S.histItem}>
+                      <div style={S.histHead}>
+                        <span style={
+                          h.badge === "통화성공" ? S.chipSky
+                          : h.badge === "부재중" ? S.chipGray
+                          : h.badge === "재연락" ? S.chipBlue
+                          : S.chipGray
+                        }>
+                          {h.kind === "ai-call" && "✨ "}{h.badge}
+                        </span>
+                        <span style={S.histAt}>{h.at}</span>
+                      </div>
+
+                      {h.kind === "manual" && (
+                        <div style={S.histBody}>
+                          {h.lines.map((l) => <div key={l}>{l}</div>)}
+                        </div>
+                      )}
+
+                      {h.kind === "ai-call" && h.summary && (
+                        <div style={S.aiCard}>
+                          <div style={S.aiMeta}>
+                            {fmtDur(h.durationSec)} · 상담사 {h.agent} · 부스터리드 앱 자동 기록
+                          </div>
+                          <ol style={S.aiSummary}>
+                            {h.summary.map((s, i) => (
+                              <li key={i} style={s.startsWith("[#재연락") ? S.aiCallbackLine : undefined}>{s}</li>
+                            ))}
+                          </ol>
+                          <div style={S.kpRow}>
+                            {h.keyPoints!.map((k) => (
+                              <span key={k.title} style={S.kpChip} title={k.detail}>{k.title}</span>
+                            ))}
+                          </div>
+                          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                            <button style={S.btnSmall} onClick={() => setTranscriptOpen(true)}>📄 전문 보기</button>
+                            {h.hasAudio && (
+                              <button style={S.btnSmallGhost} onClick={(e) => e.preventDefault()}>🎧 녹음 다운로드</button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {h.kind === "ai-call" && !h.summary && (
+                        <div style={S.histBody}>
+                          발신 — 고객이 받지 않음 (부스터리드 앱 자동 기록)
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
-
-                <div style={S.actionRow}>
-                  <button style={S.btnPrimary} onClick={() => setTranscriptOpen(true)}>
-                    📄 전문 보기
-                  </button>
-                  {lastRecorded.hasAudio && (
-                    <button style={S.btnGhostBorder} onClick={(e) => e.preventDefault()}>
-                      🎧 녹음파일 다운로드
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div style={S.card}>
-                <span style={S.sectionTitle}>최근 통화</span>
-                <p style={{ color: "#94a3b8", fontSize: 13, margin: "12px 0 0" }}>
-                  아직 연결된 통화가 없습니다. (부재중/거절만 기록됨)
-                </p>
-              </div>
-            )}
-
-            {/* 통화 이력 타임라인 */}
-            <div style={S.card}>
-              <span style={S.sectionTitle}>통화 이력 ({lead.calls.length}건)</span>
-              <ul style={S.timeline}>
-                {lead.calls.map((c) => (
-                  <li key={c.id} style={S.timelineItem}>
-                    <span style={S.timelineDot} />
-                    <span style={S.timelineAt}>{c.at}</span>
-                    <TypeBadge t={c.type} />
-                    {c.durationSec != null && <span style={S.timelineDur}>{fmtDuration(c.durationSec)}</span>}
-                    {c.hasAudio && <span style={S.audioChip}>🎧</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      {/* ── 전문 보기 모달 ── */}
-      {transcriptOpen && lastRecorded?.transcript && (
-        <div style={S.modalOverlay} onClick={() => setTranscriptOpen(false)}>
-          <div style={S.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={S.modalHeader}>
-              <div>
-                <strong>{lead.name}</strong> 통화 전문
-                <span style={S.callMeta}> · {lastRecorded.at} · {fmtDuration(lastRecorded.durationSec)}</span>
-              </div>
-              <button style={S.modalClose} onClick={() => setTranscriptOpen(false)}>✕</button>
-            </div>
-            <pre style={S.transcript}>{lastRecorded.transcript}</pre>
-            <div style={{ ...S.actionRow, marginTop: 12 }}>
-              <button style={S.btnGhostBorder} onClick={(e) => e.preventDefault()}>⬇ 전문 .txt 다운로드</button>
-              <button style={S.btnGhostBorder} onClick={(e) => e.preventDefault()}>🎧 녹음파일 다운로드</button>
+              </section>
             </div>
           </div>
+
+          {/* ── 전문 보기 (중첩 모달) ── */}
+          {transcriptOpen && (
+            <div style={S.overlay2} onClick={() => setTranscriptOpen(false)}>
+              <div style={S.tModal} onClick={(e) => e.stopPropagation()}>
+                <div style={S.modalHead}>
+                  <div>
+                    <strong>황순6</strong> 통화 전문
+                    <span style={{ color: "#94a3b8", fontSize: 12, marginLeft: 8 }}>
+                      2026.06.10 14:26 · {fmtDur(aiCall.durationSec)}
+                    </span>
+                  </div>
+                  <span style={{ cursor: "pointer", color: "#94a3b8" }} onClick={() => setTranscriptOpen(false)}>✕</span>
+                </div>
+                <pre style={S.transcript}>{aiCall.transcript}</pre>
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  <button style={S.btnSmall} onClick={(e) => e.preventDefault()}>⬇ 전문 .txt</button>
+                  <button style={S.btnSmallGhost} onClick={(e) => e.preventDefault()}>🎧 녹음 다운로드</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-// ── 스타일 ──────────────────────────────────────────────
+// ── 스타일 (부스터맥스 룩) ──────────────────────────────
 
 const S: Record<string, CSSProperties> = {
   shell: {
     display: "flex",
     minHeight: "100vh",
+    background: "#f7f8fa",
+    color: "#1e293b",
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif',
-    background: "#f1f5f9",
-    color: "#0f172a",
+    fontSize: 14,
   },
   sidebar: {
-    width: 200,
-    background: "#0f172a",
-    color: "#cbd5e1",
+    width: 220,
+    background: "white",
+    borderRight: "1px solid #eef0f4",
     display: "flex",
     flexDirection: "column",
-    padding: "20px 0",
+    padding: "16px 12px",
     flexShrink: 0,
   },
-  logo: { fontSize: 18, fontWeight: 700, color: "white", padding: "0 20px 20px" },
-  nav: { flex: 1 },
-  navItem: { padding: "11px 20px", fontSize: 14, cursor: "pointer" },
-  navItemActive: { background: "#1e293b", color: "white", borderLeft: "3px solid #3b82f6", fontWeight: 600 },
+  ws: { display: "flex", gap: 10, alignItems: "center", padding: "4px 8px 16px" },
+  wsIcon: {
+    width: 34, height: 34, borderRadius: 8, background: "#0f172a", color: "white",
+    display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800,
+  },
+  wsName: { fontWeight: 700, fontSize: 14 },
+  wsMail: { fontSize: 11, color: "#94a3b8" },
+  nav: { flex: 1, display: "flex", flexDirection: "column", gap: 2 },
+  navItem: { padding: "9px 10px", fontWeight: 600, color: "#334155", borderRadius: 8, fontSize: 13.5 },
+  navSub: { padding: "7px 10px 7px 34px", color: "#64748b", borderRadius: 8, fontSize: 13, cursor: "pointer" },
+  navActive: { background: "#f1f5f9", color: "#0f172a", fontWeight: 600 },
   mockTag: {
-    margin: "0 12px",
-    padding: "8px 10px",
-    background: "#7c2d12",
-    color: "#fed7aa",
-    fontSize: 11,
-    fontWeight: 700,
-    borderRadius: 6,
-    textAlign: "center",
+    margin: "12px 4px 8px", padding: "8px 10px", background: "#fff7ed",
+    border: "1px solid #fdba74", color: "#9a3412", fontSize: 11, fontWeight: 700,
+    borderRadius: 8, textAlign: "center",
   },
-  main: { flex: 1, display: "flex", flexDirection: "column", minWidth: 0 },
-  topbar: {
-    display: "flex",
-    alignItems: "center",
-    gap: 16,
-    padding: "14px 24px",
-    background: "white",
-    borderBottom: "1px solid #e2e8f0",
-  },
-  title: { fontSize: 20, margin: 0, fontWeight: 700 },
-  search: {
-    flex: 1,
-    maxWidth: 360,
-    padding: "8px 14px",
-    border: "1px solid #cbd5e1",
-    borderRadius: 8,
-    fontSize: 13,
-    background: "#f8fafc",
-  },
-  user: { marginLeft: "auto", fontSize: 14, color: "#475569" },
-  content: { display: "flex", gap: 20, padding: 24, alignItems: "flex-start" },
+  brand: { padding: "8px 10px", color: "#0f172a", fontSize: 15 },
 
-  tableWrap: { flex: "1 1 480px", background: "white", borderRadius: 12, border: "1px solid #e2e8f0", overflow: "hidden" },
-  tableHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "14px 16px",
-    fontSize: 14,
-    fontWeight: 600,
-    borderBottom: "1px solid #e2e8f0",
+  main: { flex: 1, padding: "24px 28px", minWidth: 0 },
+  pageHead: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
+  h1: { fontSize: 20, margin: 0, fontWeight: 700 },
+  subtitle: { color: "#94a3b8", fontSize: 13, marginTop: 4 },
+  btnOutline: {
+    padding: "9px 14px", border: "1px solid #e2e8f0", background: "white",
+    borderRadius: 10, fontSize: 13, cursor: "pointer", color: "#334155",
   },
+  tabs: { display: "flex", gap: 22, margin: "20px 0 16px", borderBottom: "1px solid #eef0f4", paddingBottom: 0 },
+  tab: { paddingBottom: 12, color: "#94a3b8", fontSize: 14, cursor: "pointer" },
+  tabActive: { color: "#0f172a", fontWeight: 700, borderBottom: "2px solid #0f172a" },
+
+  stats: {
+    display: "flex", background: "white", border: "1px solid #eef0f4", borderRadius: 12,
+    overflow: "hidden", marginBottom: 16, overflowX: "auto",
+  },
+  stat: { flex: "1 0 84px", padding: "14px 8px", textAlign: "center", borderRight: "1px solid #f1f5f9" },
+  statLabel: { fontSize: 12, color: "#94a3b8" },
+  statValue: { fontSize: 18, fontWeight: 700, marginTop: 6, color: "#cbd5e1" },
+
+  tableCard: { background: "white", border: "1px solid #eef0f4", borderRadius: 12, overflow: "hidden" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
   th: {
-    textAlign: "left",
-    padding: "10px 12px",
-    background: "#f8fafc",
-    color: "#64748b",
-    fontWeight: 600,
-    fontSize: 12,
-    borderBottom: "1px solid #e2e8f0",
-    whiteSpace: "nowrap",
+    textAlign: "left", padding: "12px 14px", color: "#64748b", fontWeight: 600,
+    fontSize: 12, borderBottom: "1px solid #eef0f4", whiteSpace: "nowrap", background: "#fafbfc",
   },
-  tr: { cursor: "pointer", borderBottom: "1px solid #f1f5f9" },
-  trActive: { background: "#eff6ff", boxShadow: "inset 3px 0 0 #3b82f6" },
-  td: { padding: "11px 12px", whiteSpace: "nowrap" },
-  grade: { display: "inline-block", padding: "1px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700 },
-  gradeA: { background: "#dcfce7", color: "#166534" },
-  gradeB: { background: "#fef9c3", color: "#854d0e" },
-  gradeC: { background: "#f1f5f9", color: "#64748b" },
-  badge: { display: "inline-block", padding: "2px 9px", borderRadius: 999, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" },
+  tr: { borderBottom: "1px solid #f5f7fa", cursor: "pointer" },
+  trActive: { background: "#f0f7ff" },
+  td: { padding: "13px 14px", whiteSpace: "nowrap", verticalAlign: "middle" },
+  routeChip: {
+    background: "#ecfdf5", color: "#047857", fontSize: 12, padding: "3px 10px",
+    borderRadius: 6, fontWeight: 600,
+  },
+  chipBlue: {
+    display: "inline-block", border: "1px solid #93c5fd", color: "#2563eb",
+    background: "#eff6ff", fontSize: 12, padding: "3px 10px", borderRadius: 8, fontWeight: 600,
+  },
+  chipSky: {
+    display: "inline-block", background: "#e0f2fe", color: "#075985",
+    fontSize: 12, padding: "3px 10px", borderRadius: 8, fontWeight: 700,
+  },
+  chipGray: {
+    display: "inline-block", border: "1px solid #e2e8f0", color: "#64748b",
+    background: "white", fontSize: 12, padding: "3px 10px", borderRadius: 8, fontWeight: 500,
+  },
+  aiChip: {
+    background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe",
+    fontSize: 12, padding: "3px 10px", borderRadius: 8, fontWeight: 600,
+  },
+  tableHint: { padding: "10px 14px", fontSize: 12, color: "#94a3b8", background: "#fafbfc" },
 
-  detail: { flex: "1 1 520px", display: "flex", flexDirection: "column", gap: 16, minWidth: 0 },
-  card: { background: "white", borderRadius: 12, border: "1px solid #e2e8f0", padding: 20 },
-  leadHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" },
-  leadName: { fontSize: 20, fontWeight: 700, display: "flex", alignItems: "center" },
-  leadPhone: { color: "#475569", fontSize: 13, marginTop: 4 },
-  tags: { display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" },
-  tag: { background: "#f1f5f9", color: "#475569", fontSize: 11, padding: "2px 8px", borderRadius: 999 },
-  callbackBanner: {
-    marginTop: 14,
-    padding: "10px 14px",
-    background: "#fef3c7",
-    border: "1px solid #fcd34d",
-    color: "#92400e",
-    borderRadius: 8,
-    fontSize: 13,
-  },
-  callHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 },
-  sectionTitle: { fontSize: 14, fontWeight: 700, color: "#0f172a" },
-  callMeta: { fontSize: 12, color: "#94a3b8", marginLeft: 8 },
-  summaryBox: { background: "#f8fafc", borderRadius: 10, padding: "14px 16px", border: "1px solid #eef2f7" },
-  summaryLabel: { fontSize: 12, fontWeight: 700, color: "#6d28d9", marginBottom: 8 },
-  summaryList: { margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 5 },
-  summaryLine: { fontSize: 13, lineHeight: 1.6 },
-  summaryCallback: { color: "#b45309", fontWeight: 600 },
-  keyPoints: { display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" },
-  keyPoint: { flex: "1 1 140px", background: "#eff6ff", borderRadius: 8, padding: "10px 12px", border: "1px solid #dbeafe" },
-  keyPointTitle: { fontSize: 12, fontWeight: 700, color: "#1d4ed8" },
-  keyPointDetail: { fontSize: 12, color: "#334155", marginTop: 3, lineHeight: 1.5 },
-  actionRow: { display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" },
-  btnPrimary: {
-    padding: "9px 16px",
-    border: "none",
-    background: "#2563eb",
-    color: "white",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  btnGhostBorder: {
-    padding: "9px 16px",
-    border: "1px solid #cbd5e1",
-    background: "white",
-    color: "#334155",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 500,
-  },
-  timeline: { listStyle: "none", margin: "12px 0 0", padding: 0, display: "flex", flexDirection: "column", gap: 10 },
-  timelineItem: { display: "flex", alignItems: "center", gap: 10, fontSize: 13 },
-  timelineDot: { width: 8, height: 8, borderRadius: "50%", background: "#cbd5e1", flexShrink: 0 },
-  timelineAt: { color: "#475569", fontVariantNumeric: "tabular-nums", minWidth: 130 },
-  timelineDur: { color: "#94a3b8", fontSize: 12 },
-  audioChip: { fontSize: 12 },
-
-  modalOverlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(15,23,42,0.5)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 50,
-    padding: 24,
+  overlay: {
+    position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)",
+    display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 40,
   },
   modal: {
-    background: "white",
-    borderRadius: 14,
-    padding: 24,
-    width: "min(720px, 100%)",
-    maxHeight: "85vh",
-    display: "flex",
-    flexDirection: "column",
+    background: "white", borderRadius: 16, width: "min(1280px, 100%)",
+    maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden",
   },
-  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, fontSize: 15 },
-  modalClose: { border: "none", background: "transparent", fontSize: 18, cursor: "pointer", color: "#64748b" },
+  modalHead: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    padding: "16px 22px", borderBottom: "1px solid #eef0f4", fontSize: 15,
+  },
+  cols: { display: "flex", overflow: "auto", minHeight: 0 },
+  col1: { width: 300, padding: 20, borderRight: "1px solid #eef0f4", flexShrink: 0, background: "#fafbfc" },
+  col2: { flex: 1, padding: 20, borderRight: "1px solid #eef0f4", minWidth: 340 },
+  col3: { width: 380, padding: 20, flexShrink: 0, overflowY: "auto" },
+  colTitle: { fontWeight: 700, fontSize: 14, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 },
+  lpChip: {
+    marginLeft: "auto", border: "1px solid #e2e8f0", borderRadius: 8,
+    fontSize: 12, padding: "3px 10px", color: "#475569", fontWeight: 500,
+  },
+  custCard: { background: "white", border: "1px solid #eef0f4", borderRadius: 12, padding: 16, marginBottom: 16 },
+  infoBlock: { marginBottom: 16 },
+  infoTitle: { fontWeight: 600, fontSize: 13, marginBottom: 8, color: "#334155" },
+  infoRow: { display: "flex", justifyContent: "space-between", fontSize: 13, color: "#475569", padding: "3px 0" },
+  infoKey: { color: "#94a3b8" },
+
+  callBtn: {
+    padding: "10px 18px", background: "#0f172a", color: "white", border: "none",
+    borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer",
+  },
+  formRow: { display: "flex", gap: 14, marginBottom: 12, alignItems: "flex-start" },
+  formKey: { width: 70, color: "#475569", fontSize: 13, paddingTop: 9, flexShrink: 0 },
+  select: {
+    flex: 1, border: "1px solid #e2e8f0", borderRadius: 10, padding: "9px 12px",
+    fontSize: 13, color: "#0f172a", background: "white",
+  },
+  textareaFilled: {
+    flex: 1, border: "1px solid #c7d2fe", background: "#f5f7ff", borderRadius: 10,
+    padding: "10px 12px", fontSize: 13, lineHeight: 1.7, color: "#1e293b",
+  },
+  autoFillTag: { fontSize: 11, color: "#6d28d9", fontWeight: 700, marginBottom: 6 },
+  autoMini: { fontSize: 11, color: "#6d28d9", fontWeight: 600, marginLeft: 8 },
+  saveBtn: {
+    padding: "10px 26px", background: "#0f172a", color: "white", border: "none",
+    borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer",
+  },
+  audioBox: {
+    flex: 1, border: "1px solid #bbf7d0", background: "#f0fdf4",
+    borderRadius: 10, padding: "12px 14px",
+  },
+  btnSmall: {
+    padding: "7px 12px", background: "#2563eb", color: "white", border: "none",
+    borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
+  },
+  btnSmallGhost: {
+    padding: "7px 12px", background: "white", color: "#334155",
+    border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 12, cursor: "pointer",
+  },
+
+  countChip: {
+    background: "#0f172a", color: "white", fontSize: 11, fontWeight: 700,
+    borderRadius: 999, padding: "2px 8px",
+  },
+  history: { display: "flex", flexDirection: "column", gap: 14 },
+  histItem: { borderBottom: "1px solid #f1f5f9", paddingBottom: 14 },
+  histHead: { display: "flex", alignItems: "center", gap: 10 },
+  histAt: { marginLeft: "auto", fontSize: 12, color: "#94a3b8" },
+  histBody: { fontSize: 13, color: "#475569", marginTop: 8, lineHeight: 1.7 },
+
+  aiCard: {
+    marginTop: 10, background: "#fafaff", border: "1px solid #e4e4f7",
+    borderRadius: 12, padding: "12px 14px",
+  },
+  aiMeta: { fontSize: 11.5, color: "#94a3b8", marginBottom: 8 },
+  aiSummary: { margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, lineHeight: 1.6 },
+  aiCallbackLine: { color: "#b45309", fontWeight: 700 },
+  kpRow: { display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" },
+  kpChip: {
+    background: "#eff6ff", color: "#1d4ed8", border: "1px solid #dbeafe",
+    fontSize: 11.5, padding: "3px 9px", borderRadius: 999, fontWeight: 600, cursor: "default",
+  },
+
+  overlay2: {
+    position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)",
+    display: "flex", alignItems: "center", justifyContent: "center", padding: 24, zIndex: 60,
+  },
+  tModal: {
+    background: "white", borderRadius: 14, padding: 22,
+    width: "min(680px, 100%)", maxHeight: "85vh", display: "flex", flexDirection: "column",
+  },
   transcript: {
-    whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
-    background: "#f8fafc",
-    border: "1px solid #eef2f7",
-    padding: 18,
-    borderRadius: 10,
-    fontSize: 13,
-    lineHeight: 1.8,
-    overflowY: "auto",
-    fontFamily: "inherit",
-    margin: 0,
+    whiteSpace: "pre-wrap", wordBreak: "break-word", background: "#f8fafc",
+    border: "1px solid #eef2f7", padding: 18, borderRadius: 10, fontSize: 13,
+    lineHeight: 1.8, overflowY: "auto", fontFamily: "inherit", margin: 0,
   },
 };
