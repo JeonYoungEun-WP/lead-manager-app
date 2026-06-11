@@ -275,7 +275,13 @@ NO_TRANSCRIPT  (callType=NO_ANSWER)  PROCESSING ◄── 좀비복구 ──┐
    (**확정 2026-06-11: 통화일 +2일 14:00**, 주말이면 다음 영업일) 으로 채워서 알림이 반드시 가동되게 한다.
    ✨ 자동 표시 + 상담사 수정 가능. "시각 미정이라 알림 없음" 상태를 만들지 않는 것이 목적.
 
-매핑 초안: NO_ANSWER→부재중(+카운트, 5회→장기부재), RECORDED+재연락마커→재연락(일시 입력/미입력),
+**✅ 1단계 구현 완료 (2026-06-11)**: `lib/status-suggest.ts` 제안 엔진 (suggestStatus + defaultNextContactKst,
+유닛 테스트 13건) — summarize 가 outcome(예약확정/재연락/거절의사/기타)·reservationAt 분류,
+transcripts POST 가 record JSON 에 `auto` 제안 저장 (구버전 앱 업로드도 summary 마커 재파싱으로 동작),
+GET list 가 부재중 차수(n/5, 5회→장기부재) 집계, 어드민 상세에 ✨제안 블록·목록에 차수 칩 표시.
+앱 v1.6 이 outcome/reservationAt 패스스루. 부스터맥스 적용은 연동 시 (사용자 담당).
+
+매핑: NO_ANSWER→부재중(+카운트, 5회→장기부재), RECORDED+재연락마커→재연락(일시 입력/미입력),
 RECORDED 의미 분류(예약확정/거절 등)는 Claude 요약 호출에 outcome 필드 추가로 처리(추가 비용 0).
 연동 전제: 부스터맥스 측 API (리드 조회 by 번호 / 상태 변경 / 상담이력 추가) — **연결은 사용자 별도 담당 (2026-06-11 확정)**.
 

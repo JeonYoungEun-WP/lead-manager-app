@@ -126,6 +126,8 @@ class SttWorker(
                             http, backendUrl, agentName, leadName, call.phone,
                             call.startedAt, transcript, summary, call.id, durationSec,
                             callback?.callbackAtMs,
+                            outcome = summaryResult.outcome,
+                            reservationAt = summaryResult.reservationAt,
                         )
                     }
                 }
@@ -156,6 +158,8 @@ class SttWorker(
         clientCallId: Long,
         durationSec: Int?,
         callbackAtMs: Long?,
+        outcome: String? = null,
+        reservationAt: String? = null,
     ) {
         val body = JSONObject()
             .put("agentName", agentName.ifBlank { "unknown" })
@@ -169,6 +173,9 @@ class SttWorker(
             .apply {
                 if (durationSec != null && durationSec > 0) put("durationSec", durationSec)
                 if (callbackAtMs != null) put("callbackAt", callbackAtMs)
+                // ✨ 자동 상태 제안 입력값 — 백엔드가 suggestStatus 계산에 사용
+                if (outcome != null) put("outcome", outcome)
+                if (reservationAt != null) put("reservationAt", reservationAt)
             }
             .toString()
         val req = Request.Builder()
@@ -220,8 +227,15 @@ class SttWorker(
         }
     }
 
-    /** 요약 텍스트 + 백엔드(Claude)의 음성사서함 판정. */
-    data class SummaryResult(val text: String, val voicemail: Boolean)
+    /** 요약 텍스트 + 백엔드(Claude)의 판정들 (음성사서함 / 통화 결과 분류). */
+    data class SummaryResult(
+        val text: String,
+        val voicemail: Boolean,
+        /** 예약확정/재연락/거절의사/기타 — 자동 상태 제안용. 구버전 응답이면 null. */
+        val outcome: String? = null,
+        /** outcome=예약확정 시 KST "YYYY-MM-DDTHH:MM". */
+        val reservationAt: String? = null,
+    )
 
     private fun fetchSummary(
         http: OkHttpClient,
@@ -246,6 +260,8 @@ class SttWorker(
             val json = JSONObject(lastLine)
             if (!json.has("summary")) return empty
             val voicemail = json.optBoolean("voicemail", false)
+            val outcome = json.optString("outcome").takeIf { it.isNotBlank() }
+            val reservationAt = json.optString("reservationAt").takeIf { it.isNotBlank() }
             val summary = json.getJSONArray("summary")
             val sb = StringBuilder()
             for (i in 0 until summary.length()) {
@@ -265,7 +281,7 @@ class SttWorker(
                     }
                 }
             }
-            return SummaryResult(sb.toString().trim(), voicemail)
+            return SummaryResult(sb.toString().trim(), voicemail, outcome, reservationAt)
         }
     }
 }

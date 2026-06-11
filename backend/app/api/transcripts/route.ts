@@ -7,6 +7,8 @@ import {
   parseTranscriptPathname,
   type CallType,
 } from "../../../lib/blob-path";
+import { extractCallback, normalizeIso } from "../../../lib/alerts";
+import { suggestStatus, type AutoSuggestion } from "../../../lib/status-suggest";
 
 /**
  * POST /api/transcripts
@@ -46,6 +48,10 @@ type TranscriptPayload = {
   callbackAt?: number;
   /** 콤마 구분 태그 (예: "재연락,긴급"). */
   tags?: string;
+  /** Claude 통화 결과 분류 — 예약확정/재연락/거절의사/기타 (신버전 앱만 전달). */
+  outcome?: string;
+  /** outcome=예약확정 시 예약 일시 (KST "YYYY-MM-DDTHH:MM"). */
+  reservationAt?: string;
 };
 
 /**
@@ -135,7 +141,20 @@ export async function POST(req: NextRequest) {
 
   const id = crypto.randomUUID();
   const uploadedAt = Date.now();
-  const record = { id, ...body, uploadedAt };
+
+  // ✨ 자동 상태 제안 (AI 초안 — 적용/수정/되돌리기는 사람 몫, PRD §10.0)
+  // 재연락 마커는 summary 텍스트에서 직접 파싱 → 구버전 앱 업로드에도 동작.
+  const cb = extractCallback(body.summary);
+  const auto: AutoSuggestion | null = suggestStatus({
+    callType,
+    startedAt: body.startedAt,
+    callbackAtIso: cb?.callbackAtIso ?? null,
+    hasCallbackMarker: cb != null,
+    outcome: body.outcome ?? null,
+    reservationAtIso: body.reservationAt ? normalizeIso(body.reservationAt) : null,
+  });
+
+  const record = { id, ...body, uploadedAt, ...(auto ? { auto } : {}) };
 
   // v4 포맷 path — 생성/파싱 규약은 lib/blob-path.ts 한 곳에서 관리.
   const path = buildTranscriptPathname({
@@ -212,7 +231,27 @@ export async function GET(_req: NextRequest) {
       .filter((x): x is NonNullable<typeof x> => x !== null)
       .map((it) => ({ ...it, audioUrl: audioUrlMap.get(it.startedAt) ?? null }))
       .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
-    return NextResponse.json({ items });
+
+    // ✨ 부재중 차수 집계 — 번호별 NO_ANSWER 누적 (너처링 프리셋 2: 5회 소진 → 장기부재)
+    const noAnswerTotal = new Map<string, number>();
+    for (const it of items) {
+      if (it.callType === "NO_ANSWER" && it.leadPhone) {
+        noAnswerTotal.set(it.leadPhone, (noAnswerTotal.get(it.leadPhone) ?? 0) + 1);
+      }
+    }
+    const enriched = items.map((it) => {
+      if (it.callType !== "NO_ANSWER" || !it.leadPhone) return it;
+      const count = noAnswerTotal.get(it.leadPhone) ?? 0;
+      return {
+        ...it,
+        auto: {
+          status: count >= 5 ? "장기부재" : "부재중",
+          noAnswerCount: count,
+          cap: 5,
+        },
+      };
+    });
+    return NextResponse.json({ items: enriched });
   } catch (e) {
     return NextResponse.json(
       { error: `blob list 실패: ${(e as Error).message}` },
