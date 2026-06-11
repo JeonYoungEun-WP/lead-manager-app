@@ -303,8 +303,14 @@ export default function BoosterMaxMockup() {
                 </div>
                 <div style={S.formRow}>
                   <span style={S.formKey}>상담일시</span>
-                  <div style={S.select}>
-                    2026-06-11 16:30 <span style={S.autoMini}>✨ 재연락 마커 자동 감지</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={S.select}>
+                      2026-06-11 16:30 <span style={S.autoMini}>✨ 재연락 마커 자동 감지 — 수정 가능</span>
+                    </div>
+                    <div style={S.fieldHint}>
+                      고객이 시각을 안 정한 재연락도 기본값(통화일 +2일 14:00)으로 자동 세팅 —
+                      세팅된 날짜에 알림 가동, 상담사 수정 가능
+                    </div>
                   </div>
                 </div>
                 <div style={{ textAlign: "right", margin: "12px 0 18px" }}>
@@ -509,8 +515,9 @@ function MobileDetailScreen({ onBack, onTranscript }: { onBack?: () => void; onT
           랜딩페이지 패키지(월 49만원) 안내. 구글시트 연동 관심.
           대표 보고 후 6/11(목) 16:30 재연락 약속.
         </div>
-        <div style={{ ...M.fieldLabel, marginTop: 12 }}>상담일시 <span style={S.autoMini}>✨ 자동 감지</span></div>
+        <div style={{ ...M.fieldLabel, marginTop: 12 }}>상담일시 <span style={S.autoMini}>✨ 자동 감지 — 수정 가능</span></div>
         <div style={S.select}>2026-06-11 16:30</div>
+        <div style={S.fieldHint}>시각 미정 재연락도 기본값(+2일 14:00) 자동 세팅 → 알림 가동</div>
         <div style={{ ...M.fieldLabel, marginTop: 12 }}>상담 녹취록</div>
         <div style={S.audioBox}>
           <div style={{ fontWeight: 600, fontSize: 14 }}>🎧 통화녹음_황순6_20260610.m4a</div>
@@ -696,6 +703,7 @@ const S: Record<string, CSSProperties> = {
     padding: "11px 13px", fontSize: 15, lineHeight: 1.7, color: "#1e293b",
   },
   autoFillTag: { fontSize: 13, color: "#6d28d9", fontWeight: 700, marginBottom: 6 },
+  fieldHint: { fontSize: 13, color: "#94a3b8", marginTop: 6, lineHeight: 1.5 },
   autoMini: { fontSize: 13, color: "#6d28d9", fontWeight: 600, marginLeft: 8 },
   saveBtn: {
     padding: "11px 28px", background: "#0f172a", color: "white", border: "none",
