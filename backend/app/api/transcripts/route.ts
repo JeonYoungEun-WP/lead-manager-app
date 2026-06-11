@@ -173,6 +173,7 @@ export async function POST(req: NextRequest) {
       contentType: "application/json; charset=utf-8",
       addRandomSuffix: false,
     });
+    listCache = null; // 새 업로드 → 다음 GET 은 신선한 목록
     return NextResponse.json({ id, url: blob.url, uploadedAt });
   } catch (e) {
     return NextResponse.json(
@@ -207,9 +208,17 @@ async function buildAudioUrlMap(): Promise<Map<number, string>> {
   return map;
 }
 
+// 어드민 폴링이 Blob 연산 한도를 소진하지 않도록 인스턴스 단위 캐시.
+// (2026-06-11 store suspended 사고 재발 방지 — list 연산을 TTL 당 1회로 제한)
+let listCache: { at: number; payload: unknown } | null = null;
+const LIST_CACHE_TTL_MS = 45_000;
+
 export async function GET(_req: NextRequest) {
   // 어드민 조회는 토큰 없이 접근 가능. (POST 업로드는 X-App-Token 유지)
   // 보안 layer 가 필요하면 Vercel Authentication / IP 화이트리스트로 분리 권장.
+  if (listCache && Date.now() - listCache.at < LIST_CACHE_TTL_MS) {
+    return NextResponse.json(listCache.payload);
+  }
   try {
     const [{ blobs }, audioUrlMap] = await Promise.all([
       list({ prefix: "transcripts/", limit: 500 }),
@@ -251,6 +260,7 @@ export async function GET(_req: NextRequest) {
         },
       };
     });
+    listCache = { at: Date.now(), payload: { items: enriched } };
     return NextResponse.json({ items: enriched });
   } catch (e) {
     return NextResponse.json(

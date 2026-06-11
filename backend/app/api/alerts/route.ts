@@ -124,8 +124,16 @@ async function fetchInBatches<T, R>(
   return out;
 }
 
+// 어드민 폴링이 Blob 연산 한도를 소진하지 않도록 인스턴스 단위 캐시.
+// alerts 는 list 1회 + record fetch 최대 200회라 가장 비싼 경로 — TTL 넉넉히.
+let alertsCache: { at: number; payload: unknown } | null = null;
+const ALERTS_CACHE_TTL_MS = 60_000;
+
 export async function GET(_req: NextRequest) {
   // 어드민 알림 조회는 토큰 없이 접근 가능 (transcripts GET 과 동일 정책).
+  if (alertsCache && Date.now() - alertsCache.at < ALERTS_CACHE_TTL_MS) {
+    return NextResponse.json(alertsCache.payload);
+  }
   try {
     const { blobs } = await list({ prefix: "transcripts/", limit: 500 });
     const limited = blobs.slice(0, MAX_RECORDS).map((b): BlobMeta => ({
@@ -216,6 +224,7 @@ export async function GET(_req: NextRequest) {
         return at - bt;
       });
 
+    alertsCache = { at: Date.now(), payload: { items } };
     return NextResponse.json({ items });
   } catch (e) {
     return NextResponse.json(
