@@ -18,6 +18,8 @@ type TranscriptItem = {
   durationSec?: number | null;
   /** 녹음 audio URL — 앱이 별도 업로드했을 때만 채워짐. 없으면 null. */
   audioUrl?: string | null;
+  /** ✨ 자동 상태 제안 (NO_ANSWER 차수 집계 — list 응답) */
+  auto?: { status: string; noAnswerCount: number; cap: number } | null;
   size: number;
   uploadedAt: string;
 };
@@ -37,6 +39,14 @@ type TranscriptDetail = {
   callType?: CallType;
   /** 녹음 audio URL — 앱이 업로드했을 때만 채워짐. */
   audioUrl?: string | null;
+  /** ✨ 자동 상태 제안 (업로드 시점에 계산·저장 — AI 초안) */
+  auto?: {
+    status: string;
+    proposalOnly: boolean;
+    nextContactAtIso: string | null;
+    reservationAtIso: string | null;
+    basis: string;
+  } | null;
 };
 
 // 라벨 규약: 통화성공(정상 통화) / 부재중(고객이 안 받음, 발신) / 놓친 전화(상담사가 못 받음, 수신) / 거절
@@ -505,6 +515,13 @@ export default function AdminPage() {
                                   {it.durationSec != null && it.durationSec > 0 && (
                                     <> · {formatDuration(it.durationSec)}</>
                                   )}
+                                  {it.auto && (
+                                    <span style={styles.autoCountChip}>
+                                      ✨ {it.auto.status === "장기부재"
+                                        ? `장기부재 (${it.auto.noAnswerCount}/${it.auto.cap})`
+                                        : `콜 ${it.auto.noAnswerCount}/${it.auto.cap}`}
+                                    </span>
+                                  )}
                                 </div>
                               </li>
                             );
@@ -674,6 +691,27 @@ function Detail({ d, onDownload }: { d: TranscriptDetail; onDownload: () => void
         </div>
       </div>
 
+      {d.auto && (
+        <div style={styles.autoSuggestBox}>
+          <div style={styles.autoSuggestTitle}>
+            ✨ 자동 상태 제안 — AI 초안 (수정·되돌리기 가능)
+          </div>
+          <div style={styles.autoSuggestBody}>
+            <strong>{d.auto.status}</strong>
+            {d.auto.proposalOnly && (
+              <span style={styles.proposalChip}>제안 — 상담사 승인 필요</span>
+            )}
+            {d.auto.nextContactAtIso && (
+              <span> · 다음 컨택 {d.auto.nextContactAtIso.replace("T", " ")}</span>
+            )}
+            {d.auto.reservationAtIso && (
+              <span> · 예약 {d.auto.reservationAtIso.replace("T", " ")}</span>
+            )}
+          </div>
+          <div style={styles.autoSuggestBasis}>근거: {d.auto.basis}</div>
+        </div>
+      )}
+
       {!isRecorded ? (
         <div style={styles.contentBox}>
           <div style={styles.nonRecordedBox}>
@@ -763,6 +801,37 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 11,
     fontWeight: 600,
     whiteSpace: "nowrap",
+  },
+  autoCountChip: {
+    marginLeft: 8,
+    padding: "1px 8px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 600,
+    background: "#f5f3ff",
+    color: "#6d28d9",
+    border: "1px solid #ddd6fe",
+    whiteSpace: "nowrap",
+  },
+  autoSuggestBox: {
+    marginTop: 16,
+    padding: "12px 16px",
+    background: "#fafaff",
+    border: "1px solid #ddd6fe",
+    borderRadius: 8,
+  },
+  autoSuggestTitle: { fontSize: 12, fontWeight: 700, color: "#6d28d9", marginBottom: 6 },
+  autoSuggestBody: { fontSize: 14, color: "#1e293b" },
+  autoSuggestBasis: { fontSize: 12, color: "#94a3b8", marginTop: 4 },
+  proposalChip: {
+    marginLeft: 8,
+    padding: "1px 8px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 700,
+    background: "#fef3c7",
+    color: "#92400e",
+    border: "1px solid #fcd34d",
   },
   audioDownloadLink: {
     marginLeft: 8,
