@@ -10,7 +10,7 @@
  */
 
 import type { CSSProperties } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 // ── 가상 데이터 ─────────────────────────────────────────
 
@@ -98,6 +98,29 @@ export default function BoosterMaxMockup() {
   const [modalOpen, setModalOpen] = useState(true);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const aiCall = HISTORY[0] as AiCall;
+
+  // 실기기 감지 — 폰/태블릿(<768px)으로 접속하면 모바일 화면을 실화면으로 표시
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [mScreen, setMScreen] = useState<"list" | "detail" | "transcript">("list");
+  useEffect(() => {
+    const check = () => setIsMobileDevice(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  if (isMobileDevice) {
+    return (
+      <div style={M.realShell}>
+        <div style={M.realRibbon}>DESIGN MOCKUP — 가상 데이터</div>
+        {mScreen === "list" && <MobileListScreen onSelect={() => setMScreen("detail")} />}
+        {mScreen === "detail" && (
+          <MobileDetailScreen onBack={() => setMScreen("list")} onTranscript={() => setMScreen("transcript")} />
+        )}
+        {mScreen === "transcript" && <MobileTranscriptScreen onBack={() => setMScreen("detail")} />}
+      </div>
+    );
+  }
 
   return (
     <div style={S.shell}>
@@ -195,125 +218,16 @@ export default function BoosterMaxMockup() {
             </div>
           </>
         ) : (
-          /* ── 모바일 시안: 폰 프레임 3장 ── */
+          /* ── 모바일 시안: 폰 프레임 3장 (실폰 접속 시엔 프레임 없이 실화면) ── */
           <div style={M.wrap}>
-            {/* ① 목록 */}
             <PhoneFrame label="① 잠재고객 목록">
-              <div style={M.topbar}>
-                <strong style={{ fontSize: 18 }}>잠재고객</strong>
-                <span style={{ marginLeft: "auto", color: "#94a3b8" }}>⌕ ☰</span>
-              </div>
-              <div style={M.chipScroll}>
-                {[["전체", 277], ["연락대기", 275], ["재연락", 1], ["부재중", 1]].map(([k, v]) => (
-                  <span key={k} style={{ ...M.statChip, ...(k === "전체" ? M.statChipActive : null) }}>
-                    {k} <strong>{v}</strong>
-                  </span>
-                ))}
-              </div>
-              {ROWS.slice(0, 4).map((r, i) => (
-                <div key={r.no} style={{ ...M.leadCard, ...(i === 0 ? M.leadCardActive : null) }}>
-                  <div style={M.leadTop}>
-                    <strong style={{ fontSize: 16 }}>{r.name}</strong>
-                    <span style={r.status === "재연락" ? S.chipBlue : S.chipGray}>{r.status}</span>
-                  </div>
-                  <div style={M.leadPhone}>{r.phone} · {r.agent}</div>
-                  <div style={M.leadMeta}>
-                    {r.ai
-                      ? <span style={S.aiChip}>✨ 통화성공 · 요약</span>
-                      : <span style={{ color: "#cbd5e1", fontSize: 13 }}>통화 기록 없음</span>}
-                    <span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: 13 }}>콜터치 {r.touch}</span>
-                  </div>
-                </div>
-              ))}
+              <MobileListScreen />
             </PhoneFrame>
-
-            {/* ② 고객 상세 */}
             <PhoneFrame label="② 고객 상세">
-              <div style={M.topbar}>
-                <span style={{ color: "#475569" }}>←</span>
-                <strong style={{ fontSize: 17, marginLeft: 10 }}>황순6</strong>
-                <span style={{ ...S.chipBlue, marginLeft: 8 }}>재연락</span>
-              </div>
-              <div style={M.section}>
-                <div style={M.custRow}>
-                  <div>
-                    <div style={{ color: "#475569" }}>📞 010-5113-1116</div>
-                    <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 2 }}>신청일 2026.05.20 17:47 · 구글시트</div>
-                  </div>
-                  <button style={M.callBtn}>📞 콜상담</button>
-                </div>
-              </div>
-
-              {/* AI 통화 카드 */}
-              <div style={M.section}>
-                <div style={M.sectionTitle}>최근 통화</div>
-                <div style={S.aiCard}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={S.chipSky}>✨ 통화성공</span>
-                    <span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: 13 }}>06.10 14:26</span>
-                  </div>
-                  <div style={S.aiMeta}>{fmtDur(aiCall.durationSec)} · 상담사 {aiCall.agent} · 자동 기록</div>
-                  <ol style={S.aiSummary}>
-                    {aiCall.summary!.slice(0, 3).map((s, i) => (
-                      <li key={i} style={s.startsWith("[#재연락") ? S.aiCallbackLine : undefined}>{s}</li>
-                    ))}
-                    <li style={{ color: "#94a3b8" }}>… 더보기</li>
-                  </ol>
-                  <div style={S.kpRow}>
-                    {aiCall.keyPoints!.map((k) => <span key={k.title} style={S.kpChip}>{k.title}</span>)}
-                  </div>
-                  <button style={{ ...S.btnSmall, marginTop: 12, width: "100%" }}>📄 전문 보기</button>
-                </div>
-              </div>
-
-              {/* 상담 작성 (자동 채움) */}
-              <div style={M.section}>
-                <div style={M.sectionTitle}>콜상담 작성</div>
-                <div style={M.fieldLabel}>상담내용 <span style={S.autoMini}>✨ 자동 입력</span></div>
-                <div style={S.textareaFilled}>
-                  랜딩페이지 패키지(월 49만원) 안내. 구글시트 연동 관심.
-                  대표 보고 후 6/11(목) 16:30 재연락 약속.
-                </div>
-                <div style={{ ...M.fieldLabel, marginTop: 12 }}>상담일시 <span style={S.autoMini}>✨ 자동 감지</span></div>
-                <div style={S.select}>2026-06-11 16:30</div>
-                <div style={{ ...M.fieldLabel, marginTop: 12 }}>상담 녹취록</div>
-                <div style={S.audioBox}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>🎧 통화녹음_황순6_20260610.m4a</div>
-                  <div style={{ color: "#16a34a", fontSize: 13, marginTop: 2 }}>✓ 앱에서 자동 업로드됨 · 5분 12초</div>
-                  <button style={{ ...S.btnSmall, marginTop: 10 }}>⬇ 다운로드</button>
-                </div>
-                <button style={{ ...M.callBtn, width: "100%", marginTop: 14 }}>저장</button>
-              </div>
-
-              {/* 상담이력 압축 */}
-              <div style={M.section}>
-                <div style={M.sectionTitle}>상담이력 4건</div>
-                {HISTORY.map((h) => (
-                  <div key={h.id} style={M.histRow}>
-                    <span style={
-                      h.badge === "통화성공" ? S.chipSky
-                      : h.badge === "재연락" ? S.chipBlue
-                      : S.chipGray
-                    }>
-                      {h.kind === "ai-call" && "✨ "}{h.badge}
-                    </span>
-                    <span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: 13 }}>{h.at}</span>
-                  </div>
-                ))}
-              </div>
+              <MobileDetailScreen />
             </PhoneFrame>
-
-            {/* ③ 전문 보기 */}
             <PhoneFrame label="③ 통화 전문">
-              <div style={M.topbar}>
-                <span style={{ color: "#475569" }}>←</span>
-                <strong style={{ fontSize: 17, marginLeft: 10 }}>통화 전문</strong>
-                <span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: 13 }}>06.10 14:26 · 5분 12초</span>
-              </div>
-              <div style={{ padding: 16 }}>
-                <pre style={{ ...S.transcript, fontSize: 14.5 }}>{aiCall.transcript}</pre>
-                <button style={{ ...S.btnSmallGhost, marginTop: 12, width: "100%" }}>⬇ 전문 .txt 다운로드</button>
-              </div>
+              <MobileTranscriptScreen />
             </PhoneFrame>
           </div>
         )}
@@ -490,6 +404,141 @@ export default function BoosterMaxMockup() {
         </div>
       )}
     </div>
+  );
+}
+
+// ── 모바일 화면 (프레임 시안 + 실폰 공용) ────────────────
+
+const AI_CALL = HISTORY[0] as AiCall;
+
+function MobileListScreen({ onSelect }: { onSelect?: () => void }) {
+  return (
+    <>
+      <div style={M.topbar}>
+        <strong style={{ fontSize: 18 }}>잠재고객</strong>
+        <span style={{ marginLeft: "auto", color: "#94a3b8" }}>⌕ ☰</span>
+      </div>
+      <div style={M.chipScroll}>
+        {[["전체", 277], ["연락대기", 275], ["재연락", 1], ["부재중", 1]].map(([k, v]) => (
+          <span key={k} style={{ ...M.statChip, ...(k === "전체" ? M.statChipActive : null) }}>
+            {k} <strong>{v}</strong>
+          </span>
+        ))}
+      </div>
+      {ROWS.slice(0, 4).map((r, i) => (
+        <div
+          key={r.no}
+          style={{ ...M.leadCard, ...(i === 0 ? M.leadCardActive : null) }}
+          onClick={() => i === 0 && onSelect?.()}
+        >
+          <div style={M.leadTop}>
+            <strong style={{ fontSize: 16 }}>{r.name}</strong>
+            <span style={r.status === "재연락" ? S.chipBlue : S.chipGray}>{r.status}</span>
+          </div>
+          <div style={M.leadPhone}>{r.phone} · {r.agent}</div>
+          <div style={M.leadMeta}>
+            {r.ai
+              ? <span style={S.aiChip}>✨ 통화성공 · 요약</span>
+              : <span style={{ color: "#cbd5e1", fontSize: 13 }}>통화 기록 없음</span>}
+            <span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: 13 }}>콜터치 {r.touch}</span>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function MobileDetailScreen({ onBack, onTranscript }: { onBack?: () => void; onTranscript?: () => void }) {
+  return (
+    <>
+      <div style={M.topbar}>
+        <span style={{ color: "#475569", cursor: "pointer", padding: "0 6px" }} onClick={onBack}>←</span>
+        <strong style={{ fontSize: 17, marginLeft: 10 }}>황순6</strong>
+        <span style={{ ...S.chipBlue, marginLeft: 8 }}>재연락</span>
+      </div>
+      <div style={M.section}>
+        <div style={M.custRow}>
+          <div>
+            <div style={{ color: "#475569" }}>📞 010-5113-1116</div>
+            <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 2 }}>신청일 2026.05.20 17:47 · 구글시트</div>
+          </div>
+          <button style={M.callBtn}>📞 콜상담</button>
+        </div>
+      </div>
+
+      <div style={M.section}>
+        <div style={M.sectionTitle}>최근 통화</div>
+        <div style={S.aiCard}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={S.chipSky}>✨ 통화성공</span>
+            <span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: 13 }}>06.10 14:26</span>
+          </div>
+          <div style={S.aiMeta}>{fmtDur(AI_CALL.durationSec)} · 상담사 {AI_CALL.agent} · 자동 기록</div>
+          <ol style={S.aiSummary}>
+            {AI_CALL.summary!.slice(0, 3).map((s, i) => (
+              <li key={i} style={s.startsWith("[#재연락") ? S.aiCallbackLine : undefined}>{s}</li>
+            ))}
+            <li style={{ color: "#94a3b8" }}>… 더보기</li>
+          </ol>
+          <div style={S.kpRow}>
+            {AI_CALL.keyPoints!.map((k) => <span key={k.title} style={S.kpChip}>{k.title}</span>)}
+          </div>
+          <button style={{ ...S.btnSmall, marginTop: 12, width: "100%" }} onClick={onTranscript}>
+            📄 전문 보기
+          </button>
+        </div>
+      </div>
+
+      <div style={M.section}>
+        <div style={M.sectionTitle}>콜상담 작성</div>
+        <div style={M.fieldLabel}>상담내용 <span style={S.autoMini}>✨ 자동 입력</span></div>
+        <div style={S.textareaFilled}>
+          랜딩페이지 패키지(월 49만원) 안내. 구글시트 연동 관심.
+          대표 보고 후 6/11(목) 16:30 재연락 약속.
+        </div>
+        <div style={{ ...M.fieldLabel, marginTop: 12 }}>상담일시 <span style={S.autoMini}>✨ 자동 감지</span></div>
+        <div style={S.select}>2026-06-11 16:30</div>
+        <div style={{ ...M.fieldLabel, marginTop: 12 }}>상담 녹취록</div>
+        <div style={S.audioBox}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>🎧 통화녹음_황순6_20260610.m4a</div>
+          <div style={{ color: "#16a34a", fontSize: 13, marginTop: 2 }}>✓ 앱에서 자동 업로드됨 · 5분 12초</div>
+          <button style={{ ...S.btnSmall, marginTop: 10 }}>⬇ 다운로드</button>
+        </div>
+        <button style={{ ...M.callBtn, width: "100%", marginTop: 14 }}>저장</button>
+      </div>
+
+      <div style={M.section}>
+        <div style={M.sectionTitle}>상담이력 {HISTORY.length}건</div>
+        {HISTORY.map((h) => (
+          <div key={h.id} style={M.histRow}>
+            <span style={
+              h.badge === "통화성공" ? S.chipSky
+              : h.badge === "재연락" ? S.chipBlue
+              : S.chipGray
+            }>
+              {h.kind === "ai-call" && "✨ "}{h.badge}
+            </span>
+            <span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: 13 }}>{h.at}</span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function MobileTranscriptScreen({ onBack }: { onBack?: () => void }) {
+  return (
+    <>
+      <div style={M.topbar}>
+        <span style={{ color: "#475569", cursor: "pointer", padding: "0 6px" }} onClick={onBack}>←</span>
+        <strong style={{ fontSize: 17, marginLeft: 10 }}>통화 전문</strong>
+        <span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: 13 }}>06.10 14:26 · 5분 12초</span>
+      </div>
+      <div style={{ padding: 16 }}>
+        <pre style={{ ...S.transcript, fontSize: 14.5 }}>{AI_CALL.transcript}</pre>
+        <button style={{ ...S.btnSmallGhost, marginTop: 12, width: "100%" }}>⬇ 전문 .txt 다운로드</button>
+      </div>
+    </>
   );
 }
 
@@ -693,6 +742,24 @@ const S: Record<string, CSSProperties> = {
 // ── 모바일 프레임 스타일 ────────────────────────────────
 
 const M: Record<string, CSSProperties> = {
+  // 실폰 접속 시 풀스크린 셸
+  realShell: {
+    minHeight: "100vh",
+    background: "#f7f8fa",
+    color: "#1e293b",
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif',
+    fontSize: 16,
+    paddingBottom: 32,
+  },
+  realRibbon: {
+    background: "#fff7ed",
+    borderBottom: "1px solid #fdba74",
+    color: "#9a3412",
+    fontSize: 12,
+    fontWeight: 700,
+    textAlign: "center",
+    padding: "6px 0",
+  },
   wrap: { display: "flex", gap: 28, alignItems: "flex-start", flexWrap: "wrap" },
   frameWrap: { display: "flex", flexDirection: "column", gap: 10 },
   frameLabel: { fontWeight: 700, fontSize: 15, color: "#475569", paddingLeft: 6 },
