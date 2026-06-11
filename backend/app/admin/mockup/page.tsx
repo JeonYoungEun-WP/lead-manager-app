@@ -73,19 +73,31 @@ const HISTORY: HistoryEntry[] = [
   { kind: "manual", id: 4, badge: "연락대기", at: "2026.05.20 17:47", lines: ["리드유입"] },
 ];
 
+// lastCall: 폰 통화 결과 기반 자동 전이 표시 (✨ = 자동)
 const ROWS = [
-  { no: 277, at: "2026.05.20 17:47", svc: "구글연동", route: "구글시트", proj: "-", name: "황순6", phone: "010-5113-1116", status: "재연락", agent: "이유림", touch: 1, ai: true },
-  { no: 276, at: "2026.05.20 17:42", svc: "BoosterMAX", route: "폼 제출", proj: "상용워크플레이스", name: "미장센", phone: "010-5291-1944", status: "연락대기", agent: "전영은", touch: 0, ai: false },
-  { no: 275, at: "2026.05.20 17:19", svc: "구글연동", route: "구글시트", proj: "-", name: "황순5", phone: "010-5113-1115", status: "연락대기", agent: "이유림", touch: 0, ai: false },
-  { no: 274, at: "2026.05.20 14:42", svc: "BoosterMAX", route: "폼 제출", proj: "상용워크플레이스", name: "에스파", phone: "010-5291-1948", status: "연락대기", agent: "이유림", touch: 0, ai: false },
-  { no: 273, at: "2026.05.14 17:03", svc: "엑셀", route: "엑셀", proj: "상용워크플레이스", name: "네번째", phone: "010-5558-6857", status: "연락대기", agent: "이유림", touch: 0, ai: false },
+  { no: 277, at: "2026.05.20 17:47", svc: "구글연동", route: "구글시트", proj: "-", name: "황순6", phone: "010-5113-1116", status: "재연락", agent: "이유림", touch: 1, lastCall: "✨ 통화성공 → 재연락 06.11 16:30" },
+  { no: 276, at: "2026.05.20 17:42", svc: "BoosterMAX", route: "폼 제출", proj: "상용워크플레이스", name: "미장센", phone: "010-5291-1944", status: "부재중", agent: "전영은", touch: 2, lastCall: "✨ 부재중 (콜 2/5)" },
+  { no: 275, at: "2026.05.20 17:19", svc: "구글연동", route: "구글시트", proj: "-", name: "황순5", phone: "010-5113-1115", status: "장기부재", agent: "이유림", touch: 5, lastCall: "✨ 부재중 5/5 → 장기부재" },
+  { no: 274, at: "2026.05.20 14:42", svc: "BoosterMAX", route: "폼 제출", proj: "상용워크플레이스", name: "에스파", phone: "010-5291-1948", status: "예약성공", agent: "이유림", touch: 3, lastCall: "✨ 통화성공 → 예약 06.14 11:00" },
+  { no: 273, at: "2026.05.14 17:03", svc: "엑셀", route: "엑셀", proj: "상용워크플레이스", name: "네번째", phone: "010-5558-6857", status: "연락대기", agent: "이유림", touch: 0, lastCall: "" },
 ];
 
 const STATS: [string, number][] = [
-  ["전체", 277], ["연락대기", 275], ["부재중", 1], ["반려", 0], ["기타", 0],
-  ["재연락", 1], ["예약성공", 0], ["예약실패", 0], ["방문성공", 0],
+  ["전체", 277], ["연락대기", 272], ["부재중", 1], ["장기부재", 1], ["기타", 0],
+  ["재연락", 1], ["예약성공", 1], ["예약실패", 0], ["방문성공", 0],
   ["방문취소", 0], ["결제성공", 0], ["결제실패", 0], ["블랙리스트", 0],
 ];
+
+/** 상태값별 칩 스타일 — 부스터맥스 상태 체계 */
+function statusChipStyle(status: string): CSSProperties {
+  switch (status) {
+    case "재연락": return S.chipBlue;
+    case "부재중": return S.chipOrange;
+    case "장기부재": return S.chipDark;
+    case "예약성공": return S.chipGreen;
+    default: return S.chipGray; // 연락대기 등
+  }
+}
 
 function fmtDur(sec: number | null): string {
   if (sec == null) return "";
@@ -204,12 +216,12 @@ export default function BoosterMaxMockup() {
                         <div style={{ color: "#94a3b8", fontSize: 14 }}>{r.phone}</div>
                       </td>
                       <td style={S.td}>
-                        <span style={r.status === "재연락" ? S.chipBlue : S.chipGray}>{r.status}</span>
+                        <span style={statusChipStyle(r.status)}>{r.status}</span>
                       </td>
                       <td style={S.td}>{r.agent} ▾</td>
                       <td style={{ ...S.td, textAlign: "center" }}>{r.touch}</td>
                       <td style={S.td}>
-                        {r.ai ? <span style={S.aiChip}>✨ 통화성공 · 요약 있음</span> : <span style={{ color: "#cbd5e1" }}>-</span>}
+                        {r.lastCall ? <span style={S.aiChip}>{r.lastCall}</span> : <span style={{ color: "#cbd5e1" }}>-</span>}
                       </td>
                     </tr>
                   ))}
@@ -438,13 +450,13 @@ function MobileListScreen({ onSelect }: { onSelect?: () => void }) {
         <span style={{ marginLeft: "auto", color: "#94a3b8" }}>⌕ ☰</span>
       </div>
       <div style={M.chipScroll}>
-        {[["전체", 277], ["연락대기", 275], ["재연락", 1], ["부재중", 1]].map(([k, v]) => (
+        {[["전체", 277], ["연락대기", 272], ["재연락", 1], ["부재중", 1], ["장기부재", 1], ["예약성공", 1]].map(([k, v]) => (
           <span key={k} style={{ ...M.statChip, ...(k === "전체" ? M.statChipActive : null) }}>
             {k} <strong>{v}</strong>
           </span>
         ))}
       </div>
-      {ROWS.slice(0, 4).map((r, i) => (
+      {ROWS.map((r, i) => (
         <div
           key={r.no}
           style={{ ...M.leadCard, ...(i === 0 ? M.leadCardActive : null) }}
@@ -452,12 +464,12 @@ function MobileListScreen({ onSelect }: { onSelect?: () => void }) {
         >
           <div style={M.leadTop}>
             <strong style={{ fontSize: 16 }}>{r.name}</strong>
-            <span style={r.status === "재연락" ? S.chipBlue : S.chipGray}>{r.status}</span>
+            <span style={statusChipStyle(r.status)}>{r.status}</span>
           </div>
           <div style={M.leadPhone}>{r.phone} · {r.agent}</div>
           <div style={M.leadMeta}>
-            {r.ai
-              ? <span style={S.aiChip}>✨ 통화성공 · 요약</span>
+            {r.lastCall
+              ? <span style={S.aiChip}>{r.lastCall}</span>
               : <span style={{ color: "#cbd5e1", fontSize: 13 }}>통화 기록 없음</span>}
             <span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: 13 }}>콜터치 {r.touch}</span>
           </div>
@@ -654,6 +666,18 @@ const S: Record<string, CSSProperties> = {
   chipGray: {
     display: "inline-block", border: "1px solid #e2e8f0", color: "#64748b",
     background: "white", fontSize: 14, padding: "3px 10px", borderRadius: 8, fontWeight: 500,
+  },
+  chipOrange: {
+    display: "inline-block", background: "#fff7ed", border: "1px solid #fdba74",
+    color: "#9a3412", fontSize: 14, padding: "3px 10px", borderRadius: 8, fontWeight: 600,
+  },
+  chipDark: {
+    display: "inline-block", background: "#334155", color: "white",
+    fontSize: 14, padding: "3px 10px", borderRadius: 8, fontWeight: 600,
+  },
+  chipGreen: {
+    display: "inline-block", background: "#dcfce7", border: "1px solid #86efac",
+    color: "#166534", fontSize: 14, padding: "3px 10px", borderRadius: 8, fontWeight: 600,
   },
   aiChip: {
     background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe",
