@@ -160,7 +160,8 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!autoRefresh) return;
-    const INTERVAL_MS = 20_000;
+    // 60초 — Blob 연산 한도 보호 (서버측 45/60초 캐시와 함께 이중 방어)
+    const INTERVAL_MS = 60_000;
     const tick = () => {
       if (typeof document !== "undefined" && document.hidden) return;
       void fetchList();
@@ -333,7 +334,7 @@ export default function AdminPage() {
             <option value="MISSED">놓친 전화 ({typeCounts.MISSED})</option>
             <option value="REJECTED">거절 ({typeCounts.REJECTED})</option>
           </select>
-          <label style={styles.autoRefreshLabel} title="20초 간격 자동 갱신">
+          <label style={styles.autoRefreshLabel} title="60초 간격 자동 갱신">
             <input
               type="checkbox"
               checked={autoRefresh}
