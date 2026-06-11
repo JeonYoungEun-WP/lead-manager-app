@@ -26,7 +26,7 @@ type AiCall = {
   keyPoints?: { title: string; detail: string }[];
   transcript?: string;
 };
-type ManualEntry = { kind: "manual"; id: number; badge: string; at: string; lines: string[] };
+type ManualEntry = { kind: "manual"; id: number; badge: string; at: string; lines: string[]; auto?: boolean };
 type HistoryEntry = AiCall | ManualEntry;
 
 const HISTORY: HistoryEntry[] = [
@@ -58,7 +58,8 @@ const HISTORY: HistoryEntry[] = [
     id: 2,
     badge: "재연락",
     at: "2026.06.10 14:26",
-    lines: ["연락대기 → 재연락", "상담사: 전영은", "📅 상담일시: 2026.06.11 16:30"],
+    auto: true,
+    lines: ["연락대기 → 재연락 (통화 요약 기반)", "상담사: 전영은", "📅 상담일시: 2026.06.11 16:30 (자동 감지)"],
   },
   {
     kind: "ai-call",
@@ -285,12 +286,17 @@ export default function BoosterMaxMockup() {
 
                 <div style={S.formRow}>
                   <span style={S.formKey}>상태값</span>
-                  <div style={S.select}>재연락 ▾</div>
+                  <div style={S.select}>
+                    재연락 ▾ <span style={S.autoMini}>✨ 자동 — 변경 가능</span>
+                  </div>
                 </div>
                 <div style={S.formRow}>
                   <span style={S.formKey}>상담내용</span>
                   <div style={S.textareaFilled}>
-                    <div style={S.autoFillTag}>✨ 통화 요약에서 자동 입력됨 — 수정 가능</div>
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <span style={S.autoFillTag}>✨ 통화 요약에서 자동 입력됨 (AI 초안)</span>
+                      <button style={{ ...S.undoBtn, marginLeft: "auto" }}>✏ 수정</button>
+                    </div>
                     랜딩페이지 제작 패키지(월 49만원) 안내. 타사 빌더에서 이전 희망,
                     구글시트 연동에 관심. 대표 보고 후 6/11(목) 16:30 재연락 약속.
                   </div>
@@ -346,6 +352,13 @@ export default function BoosterMaxMockup() {
 
                       {h.kind === "manual" && (
                         <div style={S.histBody}>
+                          {h.auto && (
+                            <div style={S.autoRow}>
+                              <span style={S.autoTag}>✨ 자동 전이 — AI 초안</span>
+                              <button style={S.undoBtn}>↩ 되돌리기</button>
+                              <button style={S.undoBtn}>✏ 수정</button>
+                            </div>
+                          )}
                           {h.lines.map((l) => <div key={l}>{l}</div>)}
                         </div>
                       )}
@@ -710,6 +723,15 @@ const S: Record<string, CSSProperties> = {
   histHead: { display: "flex", alignItems: "center", gap: 10 },
   histAt: { marginLeft: "auto", fontSize: 14, color: "#94a3b8" },
   histBody: { fontSize: 15, color: "#475569", marginTop: 8, lineHeight: 1.7 },
+  autoRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 },
+  autoTag: {
+    background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe",
+    fontSize: 12.5, padding: "2px 9px", borderRadius: 999, fontWeight: 700,
+  },
+  undoBtn: {
+    border: "1px solid #e2e8f0", background: "white", color: "#475569",
+    fontSize: 12.5, padding: "3px 10px", borderRadius: 8, cursor: "pointer",
+  },
 
   aiCard: {
     marginTop: 10, background: "#fafaff", border: "1px solid #e4e4f7",
