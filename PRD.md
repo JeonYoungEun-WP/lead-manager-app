@@ -23,7 +23,7 @@
     │     └─ 매칭되는 통화만 CallRecord 생성 (callType 분류)
     │
     ├─► ③ 처리 분기
-    │     ├─ RECORDED → SttWorker: RTZR 전사 + Gemini 요약
+    │     ├─ RECORDED → SttWorker: RTZR 전사 + Claude 요약
     │     └─ 비-RECORDED → 즉시 업로드 (전사 스킵)
     │
     ├─► ④ 로컬 저장 — Room DB
@@ -78,7 +78,7 @@
 
 ### 2.5 STT + 요약 — `SttWorker` (RECORDED 만)
 - RTZR 호출은 **앱이 직접** (오디오는 백엔드 미경유).
-- Gemini 요약은 **백엔드 프록시 경유** (API 키를 APK에 박지 않기 위해).
+- Claude 요약은 **백엔드 프록시 경유** (API 키를 APK에 박지 않기 위해).
 - 폴링: 5초 간격 최대 180회(15분).
 - 좀비 복구: 워커 시작 시 status='PROCESSING' 리셋 (이중 안전망).
 - 결과:
@@ -91,7 +91,7 @@
 | 백엔드 엔드포인트 | 역할 |
 |---|---|
 | `POST /api/rtzr/token` | RTZR 액세스 토큰 발급 프록시 (X-App-Token 필요) |
-| `POST /api/rtzr/summarize` | transcript → 5줄 요약 + 핵심 포인트 + callback 추출 (Gemini 2.5 Flash, SSE) |
+| `POST /api/rtzr/summarize` | transcript → 5줄 요약 + 핵심 포인트 + 재연락 마커 + `voicemail`/`outcome`/`reservationAt` 분류 (**Claude** `claude-opus-4-8`, JSON schema 강제 출력, ndjson 1줄 비스트리밍 — 2026-06-10 Gemini 에서 전환) |
 | `POST /api/transcripts` | 어드민 업로드 (X-App-Token 필요, idempotency 검증) |
 | `GET /api/transcripts` | 어드민 목록 (인증 없음 — URL 자체가 보안 layer, audioUrl 매핑 포함) |
 | `GET /api/transcripts/[id]` | 어드민 단건 조회 (인증 없음, audioUrl 포함) |
@@ -131,6 +131,16 @@
 - **어드민 노출**: `GET /api/transcripts` / `[id]` 가 list("audios/") 결과를 startedAt 으로 매핑해서 `audioUrl` 필드로 응답. 어드민 list/detail 에 🎧 녹음 다운로드 버튼.
 - **파일 크기**: 100MB 상한 (통화 m4a 평균 ~1MB/분).
 - **용도**: 어드민이 원본 음성 청취·검증·증빙용 다운로드. STT 파이프라인과는 독립.
+
+### 2.7.2 문서·시안 페이지 — `/admin/mockup`, `/admin/concept`
+- **`/admin/mockup`** — 부스터맥스(BoosterMAX) 잠재고객 페이지 통합 시안 (가상 데이터, 실캡처 기반).
+  - 데스크톱: 사이드바 + 리드 테이블(상태 칩, ✨최근 통화) + 3컬럼 상세 모달(고객정보 | 상담작성 | 상담이력).
+  - 모바일: 폰 프레임 시안 3장 (목록·상세·전문). 실폰(<768px) 접속 시 프레임 없이 풀스크린 실화면 내비게이션.
+  - ✨ 자동 전이/자동 입력 + [↩되돌리기][✏수정] 등 HITL UI 시각화 — 부스터맥스 팀 제안용.
+- **`/admin/concept`** — 너처링 × 앱 콜 시스템 연동 개념도 1장 (정적 SVG, 2026-06-12).
+  - ① 앱 통화 수집(감지·분류 → AI 분석) → ② 자동 상태 제안(suggestStatus + 사람 확정 원칙)
+    → ③ 부스터맥스 너처링(상태값 = 시퀀스 트리거: 프리셋 1~4 · 콜백 약속 · 총량 캡, 성공=초록/실패=빨강 구분) → 폐루프.
+  - ②→③ 점선 = 부스터맥스 API 연동 (별도 작업, 사용자 담당).
 
 ### 2.8 재연락 알림 — `CallbackNotifier` (Phase 1+2)
 - **Phase 1 (구조화)**: SttWorker 가 summary 의 `[#재연락 ...]` 마커 → DB 의 `callbackAt: Long?` + `tags` 컬럼에 저장 + 페이로드 포함. 어드민 alerts 가 record JSON 의 callbackAt 우선 사용.
@@ -200,7 +210,7 @@ NO_TRANSCRIPT  (callType=NO_ANSWER)  PROCESSING ◄── 좀비복구 ──┐
 
 ## 7. 보안·프라이버시
 
-- **Gemini API 키** APK 에 박지 않음 — 백엔드 프록시 경유.
+- **Claude(Anthropic)·RTZR API 키** APK 에 박지 않음 — Vercel 환경 변수에만 두고 백엔드 프록시 경유.
 - **앱↔백엔드 인증**: `X-App-Token` 헤더 (공유 시크릿, `local.properties`의 `app.sharedToken`).
   - POST 라우트 + RTZR 프록시만 인증 검증.
   - GET 라우트 (transcripts list/detail, alerts) 는 인증 없음 — URL 자체가 보안 layer.
@@ -294,6 +304,7 @@ RECORDED 의미 분류(예약확정/거절 등)는 Claude 요약 호출에 outco
 - 총량 캡: 리드 생애 콜 6회·자동 SMS 6건 — 폰 콜터치 데이터가 캡 계산에 기여. 고객 인바운드(MISSED)는 카운트 제외 (우리 매핑과 일치).
 - ⚠️ 설계 유의: 시퀀스 전환 규칙상 "콜 결과 입력 순간 기존 시퀀스 종료 → 새 시퀀스 시작" —
   **자동 전이를 상담사가 되돌리면 시퀀스도 원복/재계산**되어야 함 (되돌리기 = 상태만이 아니라 예약 작업 취소까지).
+- **연동 구조 개념도 1장**: `/admin/concept` (§2.7.2, 2026-06-12) — ①앱 수집 → ②AI 초안+사람 확정 → ③상태값=시퀀스 트리거 → 폐루프.
 
 - **상담사별 인증 분리** — 단일 공유 토큰 → 상담사별 토큰. 누수 시 개별 폐기 가능.
 - **어드민 SSE 푸시** — 60초 폴링 제거, 즉시 갱신.
@@ -336,3 +347,6 @@ RECORDED 의미 분류(예약확정/거절 등)는 Claude 요약 호출에 outco
 | 2026-05-08 | PRD 정합 검증 — 04-30 이후 코드 변경 없음 확인. 알림 권한(`POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM`) 제약 명시 + 폴백 동작 실패모드 표 추가. |
 | 2026-05-08 | **녹음 audio 업로드/다운로드 인프라** — `POST /api/audio/upload-token` (X-App-Token + path 강제) + transcripts GET 응답에 `audioUrl` 매핑 + 어드민 list/detail 에 "🎧 녹음 다운로드" 버튼. 앱 측 업로드 버튼/로직은 ANDROID_TODO §7. |
 | 2026-05-08 | **앱 [녹취 업로드] 버튼 — audio 업로드 파이프라인 완성**. `AudioUploadWorker` 가 `@vercel/blob` v2 클라이언트 SDK 의 raw HTTP 프로토콜로 직접 PUT (Vercel function 4.5MB body limit 우회). Room v4→v5 마이그레이션 (`audioUploadStatus`, `audioUploadError`). `CallDetailScreen` 에 RECORDED 통화 한정 상태 카드 + 클릭 후 폴링. 비-RECORDED 는 녹음 자체가 없어 카드 미표시. |
+| 2026-06-10 | **요약 엔진 Gemini → Claude 전환** (`claude-opus-4-8`, JSON schema 강제, 비스트리밍 — Gemini silent-fail/크레딧 소진 표면화 계기). **라벨 체계 개편**: 통화성공/부재중(고객 안 받음)/놓친 전화(상담사 못 받음)/거절 — 앱·어드민 공통. **음성사서함 2중 후판정** (`VoicemailDetector` + Claude `voicemail`) → NO_ANSWER 전환. 멀티유저 준비 (기본 백엔드 URL 내장, 상담사별 어드민 뷰), **온보딩 게이트** (이름→권한→녹음폴더→배터리 순서 강제), 통화내역 고객명 표시, 폴더 스캔 48h 윈도우 (데이터 부활 방지), 재연락 마커 관대 파싱, 유닛 테스트 안전망 40건 (앱 27 + 백엔드 13). |
+| 2026-06-11 | **`/admin/mockup` 부스터맥스 통합 시안** (실캡처 기반 데스크톱 + 모바일, 실폰 풀스크린, HITL UI 시각화). **자동화 설계 원칙 확정** (AI 초안 + 사람 확정, §10.0) + 재연락 미정 기본값 +2일 14:00. **자동 상태 제안 엔진 1단계** (`lib/status-suggest.ts`, outcome 분류, 부재중 n/5 집계, 어드민 ✨제안 블록). **Blob 연산 한도 보호** — 서버 캐시 45/60초 + 어드민 폴링 60초 (store suspended 재발 방지). |
+| 2026-06-12 | **`/admin/concept` 연동 개념도 페이지** — 너처링 × 앱 콜 시스템 폐루프 1장 (§2.7.2). PRD 정리: Gemini 잔재 표기 → Claude 로 일괄 수정. |
