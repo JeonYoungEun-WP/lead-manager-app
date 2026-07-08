@@ -311,6 +311,12 @@ export default function AdminPage() {
             상담사 폰에서 업로드된 통화 전문/요약
             {lastRefresh && ` · 최근 갱신 ${new Date(lastRefresh).toLocaleTimeString("ko-KR")}`}
           </p>
+          <a
+            href="/admin/consultation-performance"
+            style={{ fontSize: 13, color: "#185FA5", textDecoration: "none" }}
+          >
+            📊 상담성과 보기 →
+          </a>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <select

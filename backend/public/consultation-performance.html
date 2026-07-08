@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>상담성과 — 부스터맥스</title>
+<style>
+  :root{
+    --bg:#FAF9F5; --card:#FFFFFF; --ink:#1A1A18; --ink2:#5F5E5A; --ink3:#8E8D87;
+    --line:#E8E6DF; --line2:#F0EEE8; --sec:#F4F2EC; --info-bg:#E5EFFA; --info:#185FA5;
+    --orange:#C8791B; --blue:#185FA5; --green:#0F6E56; --red:#A8473F; --radius:10px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#1F1E1B; --card:#262521; --ink:#E8E6DF; --ink2:#B4B2A9; --ink3:#888780;
+      --line:#3A3833; --line2:#322F2B; --sec:#2E2C28; --info-bg:#1C3247; --info:#7FB1E6;
+      --orange:#E0A040; --blue:#7FB1E6; --green:#4FB893; --red:#D9776E; }
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    font-size:14px; line-height:1.5; padding:24px;}
+  .wrap{max-width:1080px; margin:0 auto;}
+  h1{font-size:20px; margin:0; font-weight:600;}
+  .sub{font-size:13px; color:var(--ink2); margin:3px 0 0;}
+  .tabs{display:flex; gap:18px; border-bottom:1px solid var(--line); margin:18px 0 14px;}
+  .tab{padding:7px 2px; color:var(--ink3); cursor:pointer; font-size:14px;}
+  .tab.on{color:var(--ink); font-weight:600; border-bottom:2px solid var(--ink);}
+  .row{display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;}
+  .seg{display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .seg span{padding:6px 13px; font-size:13px; color:var(--ink3); cursor:pointer;}
+  .seg span.on{background:var(--sec); color:var(--ink); font-weight:600;}
+  .seg.small span{padding:5px 10px; font-size:12px;}
+  .seg.small span.on{background:var(--info-bg); color:var(--info);}
+  .spacer{flex:1;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; margin-bottom:16px;}
+  .funnel-head{display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;}
+  .funnel-head .t{font-size:13px;} .funnel-head .t b{font-weight:600;}
+  .muted{color:var(--ink2);} .tiny{font-size:11px; color:var(--ink3);}
+  .dbline{display:flex; align-items:center; gap:14px; margin-top:14px; padding:10px 12px; background:var(--sec); border-radius:8px; flex-wrap:wrap; font-size:13px;}
+  .dbline b{font-size:16px;} .dbline .veff{font-size:18px; color:var(--info);}
+  .steps{display:grid; gap:0; margin-top:16px;}
+  .step{padding:0 14px; position:relative;}
+  .step + .step{border-left:1px solid var(--line);}
+  .step .lbl{font-size:12px; color:var(--ink2);}
+  .step .num{font-size:27px; font-weight:600; line-height:1.15;}
+  .step .cap{font-size:11px; color:var(--ink3);}
+  .step .badge{position:absolute; left:-13px; top:28px; width:26px; height:26px; border-radius:50%;
+    background:var(--sec); display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--ink2);}
+  .bar{display:flex; height:64px; border-radius:12px; overflow:hidden; font-size:12px; margin-top:18px; box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .bar > div{display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; gap:2px; transition:width .5s ease;}
+  .bar .bs-l{font-size:12px; font-weight:600; line-height:1.1; white-space:nowrap;}
+  .bar .bs-p{font-size:14px; font-weight:700; line-height:1.1;}
+  .bar .bs-p.dim{font-size:11px; font-weight:400; opacity:.85;}
+  table{width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap;}
+  thead tr{border-bottom:1px solid var(--line); color:var(--ink2);}
+  th,td{padding:9px 6px; text-align:right;}
+  th:first-child,td:first-child,th.l,td.l{text-align:left;}
+  th{font-weight:500;} th .u{font-weight:400; font-size:10px;}
+  tbody tr{border-bottom:1px solid var(--line2);}
+  tfoot tr{border-top:1px solid var(--line); font-weight:600;}
+  .tcol{overflow-x:auto;}
+  .pill{padding:3px 9px; border-radius:99px; background:var(--sec); color:var(--ink2); font-size:11px;}
+  .pill.info{background:var(--info-bg); color:var(--info); font-weight:500;}
+  .grp{background:var(--sec);} .gh{background:var(--sec); border-radius:6px 6px 0 0; text-align:center; font-size:11px; padding:4px 6px;}
+  .ig{background:var(--info-bg);}
+  .av{display:inline-flex; align-items:center; gap:7px;}
+  .av i{width:24px;height:24px;border-radius:50%;background:var(--info-bg);color:var(--info);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;font-style:normal;}
+  .note{margin-top:12px; padding:10px 12px; background:var(--sec); border-radius:8px; font-size:11.5px; color:var(--ink2); line-height:1.8;}
+  .ink{color:var(--ink);} .info{color:var(--info);} .or{color:var(--orange);} .gr{color:var(--green);} .rd{color:var(--red);} .t3{color:var(--ink3);}
+  .hide{display:none;}
+  .legend{display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;}
+  #agentChart{display:grid; grid-template-columns:repeat(3,1fr); gap:20px;}
+  .gg-title{font-size:12px; font-weight:600; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--line2);}
+  .gg-bar{display:grid; grid-template-columns:48px 1fr 40px; align-items:center; gap:7px; margin-bottom:7px;}
+  .gg-name{font-size:11px; color:var(--ink2); text-align:right; white-space:nowrap;}
+  .gg-track{height:15px; background:var(--sec); border-radius:4px; overflow:hidden;}
+  .gg-fill{height:100%; border-radius:4px; transition:width .4s ease;}
+  .gg-val{font-size:11px; font-weight:600; text-align:right;}
+  @media (max-width:720px){ #agentChart{grid-template-columns:1fr;} #mgrGrid{grid-template-columns:1fr !important;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div>
+    <h1>상담성과 <span style="color:var(--ink3); font-size:14px;">ⓘ</span></h1>
+    <p class="sub">랜딩별·상담사별 상담 활동·효율을 확인합니다. (랜딩별 상단 = 전환 퍼널 개요)</p>
+  </div>
+
+  <div class="tabs">
+    <div class="tab on">부스터맥스</div>
+    <div class="tab">위픽대행</div>
+  </div>
+
+  <!-- 보기 토글 -->
+  <div class="row">
+    <span class="muted" style="font-size:13px;">보기</span>
+    <span class="seg" id="viewSeg">
+      <span data-view="landing" class="on">▦ 랜딩별</span>
+      <span data-view="agent">⚌ 상담사별</span>
+    </span>
+  </div>
+
+  <!-- ============ 랜딩별 ============ -->
+  <div id="view-landing">
+    <div class="card">
+      <div class="funnel-head">
+        <span class="t"><b>▼ 전환 퍼널 개요</b> <span class="muted" id="funnelDesc"></span></span>
+        <span class="tiny">신규 30분 내 컨택률 <span class="ink" style="font-weight:600;">75%</span> · 평균 첫 연락 <span class="ink" style="font-weight:600;">2시간 39분</span></span>
+      </div>
+      <div class="dbline">
+        <span><span class="muted">총 DB수</span> <b>38</b></span>
+        <span class="t3">−</span>
+        <span><span class="muted">무효DB</span> <b class="rd">10</b> <span class="tiny">결번·중복·블랙</span></span>
+        <span class="t3">=</span>
+        <span><span class="muted">유효DB</span> <b class="veff">28</b> <span class="tiny">콜 대상 · 퍼널 시작점</span></span>
+      </div>
+      <div class="steps" id="funnelSteps"></div>
+      <div class="bar" id="funnelBar"></div>
+      <p class="tiny" id="funnelFoot" style="margin:8px 0 0;"></p>
+    </div>
+
+    <div class="tcol">
+      <table>
+        <thead id="landTHead"></thead>
+        <tbody id="landTBody"></tbody>
+      </table>
+    </div>
+    <p class="tiny" id="landFoot" style="margin:10px 2px 0;"></p>
+  </div>
+
+  <!-- ============ 상담사별 ============ -->
+  <div id="view-agent" class="hide">
+    <div class="card">
+      <div class="funnel-head" style="margin-bottom:12px;">
+        <span class="t"><b>📋 매니저 요약</b> <span class="tiny">노력(카드 이행) × 성과(리드당 예약률) 자동 분류</span></span>
+      </div>
+      <div style="display:grid; grid-template-columns:300px 1fr; gap:20px; align-items:start;" id="mgrGrid">
+        <div id="quadChart"></div>
+        <div id="mgrSummary" style="font-size:12.5px; line-height:1.85;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="funnel-head" style="margin-bottom:16px;">
+        <span class="t"><b>📊 상담사별 성과 비교</b> <span class="tiny">지표별 상담사 순위 · 👑 = 1위</span></span>
+      </div>
+      <div id="agentChart"></div>
+    </div>
+
+    <div class="legend">
+      <span class="pill">배정·유효리드 = 본인이 처음 받은 리드</span>
+      <span class="pill">콜터치·통화연결 = 활동</span>
+      <span class="pill">카드 이행 = 액션카드 당일 수행률</span>
+    </div>
+    <div class="tcol">
+      <table>
+        <thead>
+          <tr style="color:var(--ink2); font-size:11px;">
+            <th></th>
+            <th colspan="3" class="gh" style="background:var(--info-bg); color:var(--info);">성과 (리드 대비)</th>
+            <th colspan="5" class="gh">활동</th>
+            <th colspan="3" class="gh">카드 이행</th>
+          </tr>
+          <tr style="border-bottom:1px solid var(--line); color:var(--ink2);">
+            <th class="l">상담사</th>
+            <th>배정<br>총리드</th>
+            <th class="info">유효<br>리드</th>
+            <th class="ig">리드당<br>예약성공률</th>
+            <th class="grp">유효당<br>콜터치</th>
+            <th>콜터치<br>수</th>
+            <th>통화연결<br><span class="u">÷콜터치</span></th>
+            <th>예약<br><span class="u">÷연결</span></th>
+            <th>방문<br><span class="u">÷예약</span></th>
+            <th class="grp">신규 30분<br>컨택률</th>
+            <th class="grp">부재중<br>재컨택률</th>
+            <th class="grp">가망<br>재컨택률</th>
+          </tr>
+        </thead>
+        <tbody id="agentTBody"></tbody>
+        <tfoot id="agentTFoot"></tfoot>
+      </table>
+    </div>
+    <div class="note">
+      · <b>배정 총리드 / 유효리드</b>: 본인이 처음 배정받은 리드 기준. 유효 = 총 − 무효(결번·중복·블랙).<br>
+      · <b>성과 그룹 — 리드당 예약성공률</b>: 예약 ÷ 유효리드. "리드를 받아 최종 예약까지 만든 비율"(관리자 핵심 지표). <b>활동 그룹의 예약 ÷연결</b>은 통화 성사 후 클로징 실력으로, 둘은 다른 질문에 답함.<br>
+      · <b>카드 이행 그룹</b> — 액션카드별 이행/발생 건수와 이행률. <b>신규 30분 컨택</b>: 인입 +30분 내 첫 콜 시도. <b>부재중 재컨택</b>: 카드 발생 <b>당일 내</b> 콜 시도. <b>가망 재컨택</b>(1회 이상 연결 고객): 카드 발생 <b>당일 내</b> 콜 시도(콜백 약속 시각이 있으면 ±30분). 콜 시각은 통화앱 자동 기록. 색: <span style="color:var(--green);">80%+</span> · <span style="color:var(--orange);">60~79%</span> · <span style="color:var(--red);">60% 미만</span>. — = 해당 카드 미발생.
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  // ---------- 데이터 (더미) ----------
+  // 랜딩: [브랜드, 랜딩, 총DB, 무효, 유효, 콜터치, 연결리드(리드기준), 연결수(활동기준), 예약, 방문, 첫연락분]
+  var LAND = [
+    ['강남 미소 안과','봄 캠페인 메인 LP',11,2,9,13,9,13,2,1,162],
+    ['서초 피트니스','신규 회원 메인 LP',11,2,9,10,8,9,1,1,162],
+    ['역삼 법률사무소','여름 프로모션 메인 LP',9,4,5,13,5,12,2,0,164],
+    ['강남 미소 안과','가을 특가 메인 LP',7,2,5,7,4,5,0,0,142]
+  ];
+  // 합계
+  var SUM={tot:38,inv:10,eff:28,touch:43,connLead:24,connAct:39,resv:5,visit:2};
+
+  // 상담사: [이름, 배정총, 유효, 콜터치, 통화연결, 예약, 방문,
+  //          신규카드발생, 신규30분이행, 부재카드발생, 부재당일이행, 가망카드발생, 가망당일이행]
+  var AGENT=[
+    ['이상담',18,15,58,41,6,5, 15,13, 6,6, 3,3],
+    ['박상담',14,11,31,24,2,1, 11,6,  5,3, 2,1],
+    ['최상담',16,14,52,44,8,7, 14,13, 4,4, 4,4],
+    ['김상담',12,9,24,17,2,2,  9,5,   4,2, 2,1],
+    ['정상담',10,8,29,22,3,2,  8,6,   3,3, 2,2]
+  ];
+
+  var view='landing';
+
+  // ---------- 랜딩별 퍼널 (리드 기준 단일) ----------
+  function renderFunnel(){
+    document.getElementById('funnelDesc').textContent = '리드가 단계별로 얼마나 내려가나 · 도달 리드 건수';
+    var steps = document.getElementById('funnelSteps');
+    var bar = document.getElementById('funnelBar');
+    steps.style.gridTemplateColumns='repeat(4,1fr)';
+    var connPct=Math.round(SUM.connLead/SUM.eff*100), resvPct=Math.round(SUM.resv/SUM.connLead*100);
+    steps.innerHTML =
+      stepHtml('유효DB',SUM.eff,'콜 대상 리드',null,'info')
+     +stepHtml('통화연결',SUM.connLead,'유효DB 중 '+connPct+'%',connPct+'%','blue')
+     +stepHtml('예약',SUM.resv,'연결 중 '+resvPct+'%',resvPct+'%','blue')
+     +stepHtml('방문',SUM.visit,'예약 중 '+Math.round(SUM.visit/SUM.resv*100)+'%',Math.round(SUM.visit/SUM.resv*100)+'%','green');
+    bar.innerHTML =
+      barSeg(100,'유효DB '+SUM.eff,'100%','#B5D4F4','#042C53')
+     +barSeg(86,'연결 '+SUM.connLead,connPct+'%','#378ADD','#fff')
+     +barSeg(18,'예약 '+SUM.resv,Math.round(SUM.resv/SUM.eff*100)+'%','#185FA5','#fff')
+     +barSeg(18,'방문 '+SUM.visit,Math.round(SUM.visit/SUM.eff*100)+'%','#0F6E56','#fff');
+    document.getElementById('funnelFoot').textContent='막대 길이 = 도달 리드 수 · 각 칸의 % = 유효DB('+SUM.eff+') 대비 누적 전환율. 무효DB(10) 제외 · 유효DB에서 시작.';
+  }
+  function stepHtml(lbl,num,cap,badge,cls){
+    var b = badge ? '<span class="badge '+(cls||'')+'" style="'+(cls==='blue'?'color:var(--blue);':cls==='green'?'color:var(--green);':'')+'">'+badge+'</span>' : '';
+    var nc = cls==='info' ? ' info':'';
+    return '<div class="step">'+b+'<div class="lbl">'+lbl+'</div><div class="num'+nc+'">'+num+'</div><div class="cap">'+cap+'</div></div>';
+  }
+  function barSeg(w,label,pct,bg,fg){
+    var p = pct===null ? '' : '<span class="bs-p'+(pct==='100%'?' dim':'')+'">'+pct+'</span>';
+    return '<div style="width:'+w+'%; min-width:52px; background:'+bg+'; color:'+fg+';"><span class="bs-l">'+label+'</span>'+p+'</div>';
+  }
+
+
+  // ---------- 랜딩별 테이블 (리드 기준 + 노력 밀도) ----------
+  function renderLandTable(){
+    var head=document.getElementById('landTHead'), body=document.getElementById('landTBody');
+    head.innerHTML='<tr>'
+      +'<th class="l">브랜드</th><th class="l">랜딩페이지</th>'
+      +'<th>총DB</th><th class="rd">무효</th><th class="info">유효DB</th>'
+      +'<th>콜터치수</th><th class="grp">유효당<br>콜터치</th>'
+      +'<th>통화연결<br><span class="u">÷유효DB</span></th>'
+      +'<th>예약<br><span class="u">÷유효DB</span></th>'
+      +'<th>방문<br><span class="u">÷예약</span></th></tr>';
+    body.innerHTML=LAND.map(function(r){
+      var conn=r[6], dens=(r[5]/r[4]).toFixed(1);
+      var densHi=parseFloat(dens)>=2?'or':'';
+      var cp=Math.round(conn/r[4]*100), bp=Math.round(r[8]/r[4]*100), vp=r[8]>0?Math.round(r[9]/r[8]*100):null;
+      return '<tr><td class="l">'+r[0]+'</td><td class="l">'+r[1]+'</td>'
+        +'<td>'+r[2]+'</td><td class="rd">'+r[3]+'</td><td class="info" style="font-weight:500;">'+r[4]+'</td>'
+        +'<td>'+r[5]+'</td>'
+        +'<td class="grp '+densHi+'" style="font-weight:500;">'+dens+'</td>'
+        +cell(conn,cp,'or')+cell(r[8],bp,'info')+cell(r[9],vp,'gr')+'</tr>';
+    }).join('');
+    document.getElementById('landFoot').textContent='통화연결·예약 분모 = 유효DB, 방문 분모 = 예약 (리드 단위). 유효당 콜터치 = 노력 밀도 — 너처링 작동 시 2~3으로 상승, 2 이상 주황 표시.';
+  }
+  function cell(count,pct,cls){
+    var pc = pct===null ? '<span class="t3">0%</span>' : '<span class="'+cls+'">'+pct+'%</span>';
+    return '<td><div style="font-weight:500;">'+count+'</div><div style="font-size:11px;">'+pc+'</div></td>';
+  }
+  function fmtMin(m){
+    if(m<60) return m+'분';
+    var h=Math.floor(m/60), mm=m%60;
+    return mm? h+'시간 '+mm+'분' : h+'시간';
+  }
+
+  // ---------- 상담사별 ----------
+  function cardCell(done, total){
+    if(total===0) return '<td class="grp t3">—</td>';
+    var p=Math.round(done/total*100);
+    var col = p>=80 ? 'var(--green)' : (p>=60 ? 'var(--orange)' : 'var(--red)');
+    return '<td class="grp"><div style="font-weight:500;">'+done+'/'+total+'</div><div style="font-size:11px; color:'+col+';">'+p+'%</div></td>';
+  }
+  function renderAgent(){
+    var body=document.getElementById('agentTBody'), foot=document.getElementById('agentTFoot');
+    var t=[0,0,0,0,0,0, 0,0,0,0,0,0];
+    body.innerHTML=AGENT.map(function(a){
+      t[0]+=a[1];t[1]+=a[2];t[2]+=a[3];t[3]+=a[4];t[4]+=a[5];t[5]+=a[6];
+      t[6]+=a[7];t[7]+=a[8];t[8]+=a[9];t[9]+=a[10];t[10]+=a[11];t[11]+=a[12];
+      var dens=(a[3]/a[2]).toFixed(1);
+      var densHi=parseFloat(dens)>=2?'or':'';
+      var leadBook=Math.round(a[5]/a[2]*100);   // 예약 ÷ 유효리드
+      var cp=Math.round(a[4]/a[3]*100);          // 연결 ÷ 콜터치
+      var bp=a[4]>0?Math.round(a[5]/a[4]*100):null; // 예약 ÷ 연결
+      var vp=a[5]>0?Math.round(a[6]/a[5]*100):null; // 방문 ÷ 예약
+      return '<tr><td class="l"><span class="av"><i>'+a[0].slice(0,1)+'</i>'+a[0]+'</span></td>'
+        +'<td class="ig">'+a[1]+'</td>'
+        +'<td class="ig info" style="font-weight:500;">'+a[2]+'</td>'
+        +'<td class="ig"><div style="font-weight:600;">'+a[5]+'</div><div style="font-size:11px; color:var(--info);">'+leadBook+'%</div></td>'
+        +'<td class="grp '+densHi+'" style="font-weight:500;">'+dens+'</td>'
+        +'<td>'+a[3]+'</td>'
+        +cell(a[4],cp,'or')+cell(a[5],bp,'info')+cell(a[6],vp,'gr')
+        +cardCell(a[8],a[7])+cardCell(a[10],a[9])+cardCell(a[12],a[11])+'</tr>';
+    }).join('');
+    var sumDens=(t[2]/t[1]).toFixed(1);
+    var sumLeadBook=Math.round(t[4]/t[1]*100);
+    var sumCp=Math.round(t[3]/t[2]*100), sumBp=Math.round(t[4]/t[3]*100), sumVp=Math.round(t[5]/t[4]*100);
+    foot.innerHTML='<tr><td class="l">합계</td>'
+      +'<td class="ig">'+t[0]+'</td><td class="ig info">'+t[1]+'</td>'
+      +'<td class="ig"><div style="font-weight:600;">'+t[4]+'</div><div style="font-size:11px; color:var(--info);">'+sumLeadBook+'%</div></td>'
+      +'<td class="grp or">'+sumDens+'</td>'
+      +'<td>'+t[2]+'</td>'
+      +cell(t[3],sumCp,'or')+cell(t[4],sumBp,'info')+cell(t[5],sumVp,'gr')
+      +cardCell(t[7],t[6])+cardCell(t[9],t[8])+cardCell(t[11],t[10])+'</tr>';
+  }
+
+  // ---------- 매니저 요약 + 4분면 ----------
+  function agentStats(a){
+    // 노력 = 3개 카드 이행률 평균, 성과 = 리드당 예약률
+    var cardTot=a[7]+a[9]+a[11], cardDone=a[8]+a[10]+a[12];
+    return {
+      name:a[0],
+      effort: cardTot>0 ? Math.round(cardDone/cardTot*100) : 0,
+      perf: Math.round(a[5]/a[2]*100)
+    };
+  }
+  function renderQuadrant(){
+    var stats=AGENT.map(agentStats);
+    var avgE=stats.reduce(function(s,x){return s+x.effort;},0)/stats.length;
+    var avgP=stats.reduce(function(s,x){return s+x.perf;},0)/stats.length;
+    var W=300,H=240,pad=30;
+    function px(e){return pad+(e/100)*(W-pad-10);}
+    function py(p){return H-pad-(p/60)*(H-pad-14);} // 성과 0~60% 스케일
+    var midX=px(avgE), midY=py(avgP);
+    var dots=stats.map(function(s){
+      var q = (s.effort>=avgE?(s.perf>=avgP?'①':'③'):(s.perf>=avgP?'②':'④'));
+      var col = q==='①'?'var(--green)':q==='③'?'var(--orange)':q==='④'?'var(--red)':'var(--blue)';
+      return '<circle cx="'+px(s.effort)+'" cy="'+py(s.perf)+'" r="5" fill="'+col+'"/>'
+        +'<text x="'+(px(s.effort)+8)+'" y="'+(py(s.perf)+4)+'" font-size="10" fill="var(--ink2)">'+s.name+'</text>';
+    }).join('');
+    document.getElementById('quadChart').innerHTML =
+      '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%; max-width:300px;">'
+      +'<rect x="'+pad+'" y="14" width="'+(W-pad-10)+'" height="'+(H-pad-14)+'" fill="none" stroke="var(--line)" stroke-width="1"/>'
+      +'<line x1="'+midX+'" y1="14" x2="'+midX+'" y2="'+(H-pad)+'" stroke="var(--line)" stroke-dasharray="3,3"/>'
+      +'<line x1="'+pad+'" y1="'+midY+'" x2="'+(W-10)+'" y2="'+midY+'" stroke="var(--line)" stroke-dasharray="3,3"/>'
+      +dots
+      +'<text x="'+(W-12)+'" y="'+(H-8)+'" font-size="10" text-anchor="end" fill="var(--ink3)">노력(카드 이행률) →</text>'
+      +'<text x="12" y="20" font-size="10" fill="var(--ink3)" transform="rotate(-90 12 20)" text-anchor="end">성과(예약률) →</text>'
+      +'</svg>';
+
+    // 요약 텍스트 (자동 규칙)
+    var q1=[],q2=[],q3=[],q4=[];
+    stats.forEach(function(s){
+      if(s.effort>=avgE&&s.perf>=avgP)q1.push(s);
+      else if(s.effort<avgE&&s.perf>=avgP)q2.push(s);
+      else if(s.effort>=avgE&&s.perf<avgP)q3.push(s);
+      else q4.push(s);
+    });
+    // 순위 일치도로 상관 판정
+    var byE=stats.slice().sort(function(a,b){return b.effort-a.effort;}).map(function(s){return s.name;});
+    var byP=stats.slice().sort(function(a,b){return b.perf-a.perf;}).map(function(s){return s.name;});
+    var match=0; for(var i=0;i<3;i++){ if(byP.indexOf(byE[i])<3) match++; }
+    var corr = match>=3?'강함':(match===2?'있음':'약함');
+    function nm(arr){return arr.map(function(s){return s.name;}).join('·');}
+    var html='';
+    html+='<div>· <b>노력↔성과 상관: '+corr+'</b> <span class="tiny">(카드 이행 상위 3명 중 '+match+'명이 예약률 상위 3위 내)</span></div>';
+    if(q1.length)html+='<div>· <span style="color:var(--green); font-weight:600;">① 모범</span> '+nm(q1)+' — 유지, 방식 팀 전파</div>';
+    if(q2.length)html+='<div>· <span style="color:var(--blue); font-weight:600;">② 효율형</span> '+nm(q2)+' — 비결 파악, 리드 배분 편향 확인</div>';
+    if(q3.length)html+='<div>· <span style="color:var(--orange); font-weight:600;">③ 노력형</span> '+nm(q3)+' — 스킬 코칭 대상 (열심히 하는데 성과 미달)</div>';
+    if(q4.length)html+='<div>· <span style="color:var(--red); font-weight:600;">④ 위험</span> '+nm(q4)+' — 카드 이행부터 (행동 교정 우선)</div>';
+    html+='<div class="tiny" style="margin-top:6px;">기준선 = 팀 평균 (노력 '+Math.round(avgE)+'% · 성과 '+Math.round(avgP)+'%). 상관≠인과 — 표본이 작을수록 분기 누적으로 확인 권장.</div>';
+    document.getElementById('mgrSummary').innerHTML=html;
+  }
+
+  // ---------- 상담사 비교 그래프 (지표별 그룹) ----------
+  function renderAgentChart(){
+    var metrics=[
+      {name:'연결율',color:'#C8791B',max:100,unit:'%',val:function(a){return Math.round(a[4]/a[3]*100);}},
+      {name:'예약율',color:'#185FA5',max:30, unit:'%',val:function(a){return a[4]>0?Math.round(a[5]/a[4]*100):0;}},
+      {name:'유효당 콜터치',color:'#0F6E56',max:5,unit:'',val:function(a){return +(a[3]/a[2]).toFixed(1);}}
+    ];
+    document.getElementById('agentChart').innerHTML = metrics.map(function(m){
+      var scale = m.max===100 ? '' : (m.max===30 ? ' <span class="tiny">(0~30% 기준)</span>' : ' <span class="tiny">(0~5 기준)</span>');
+      var best = Math.max.apply(null, AGENT.map(function(a){return m.val(a);}));
+      var bars = AGENT.map(function(a){
+        var v=m.val(a), w=Math.min(100, v/m.max*100);
+        var isTop = v===best;
+        var nameHtml = isTop
+          ? '<div class="gg-name" style="color:var(--ink); font-weight:700;">👑'+a[0]+'</div>'
+          : '<div class="gg-name">'+a[0]+'</div>';
+        var fillStyle = 'width:'+w+'%; background:'+m.color+';' + (isTop?'':'opacity:.45;');
+        var valStyle = isTop ? 'color:'+m.color+'; font-size:12px;' : 'color:'+m.color+'; opacity:.6;';
+        return '<div class="gg-bar">'+nameHtml
+          +'<div class="gg-track"><div class="gg-fill" style="'+fillStyle+'"></div></div>'
+          +'<div class="gg-val" style="'+valStyle+'">'+v+m.unit+'</div></div>';
+      }).join('');
+      return '<div class="gg-block"><div class="gg-title" style="color:'+m.color+';">'+m.name+scale+'</div>'+bars+'</div>';
+    }).join('');
+  }
+
+  // ---------- 토글 ----------
+  function applyView(){
+    document.getElementById('view-landing').classList.toggle('hide', view!=='landing');
+    document.getElementById('view-agent').classList.toggle('hide', view!=='agent');
+  }
+  document.getElementById('viewSeg').addEventListener('click',function(e){
+    var el=e.target.closest('[data-view]'); if(!el) return;
+    view=el.getAttribute('data-view');
+    this.querySelectorAll('span').forEach(function(s){s.classList.toggle('on', s===el);});
+    applyView();
+  });
+
+  // ---------- 초기 렌더 ----------
+  renderFunnel(); renderLandTable(); renderAgent(); renderAgentChart(); renderQuadrant(); applyView();
+})();
+</script>
+</body>
+</html>
